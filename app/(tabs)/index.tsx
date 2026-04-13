@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { Image } from 'expo-image';
 import { Platform, StyleSheet } from 'react-native';
 
@@ -96,3 +97,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
 });
+=======
+import { View, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+export default function HomeScreen() {
+  return (
+    <SafeAreaView className="flex-1 bg-background">
+      <Text className="text-text-primary text-2xl font-bold p-4">Home</Text>
+    </SafeAreaView>
+  );
+}
+>>>>>>> 6268c54 (debut app musix)

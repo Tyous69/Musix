@@ -1,50 +1,34 @@
-# Welcome to your Expo app 👋
+# Musix — Dev Log
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Stack
 
-## Get started
+- Expo SDK 54 + Expo Go (RNTP plus tard)
+- Expo Router (file-based)
+- NativeWind (Tailwind)
+- expo-sqlite, expo-av, expo-file-system
+- Zustand + React Query
+- Last.fm API + Deezer API (images)
 
-1. Install dependencies
+## État actuel
 
-   ```bash
-   npm install
-   ```
+- ✅ Setup complet
+- ✅ SQLite initialisé
+- ✅ Last.fm service + hooks
+- ✅ Navigation tabs (Home, Search, Library, Profile)
+- ✅ Search screen fonctionnel
+- ✅ Artist screen (image Deezer, bio, albums)
+- 🔜 Album screen
+- 🔜 Player screen
+- 🔜 Library screen
+- 🔜 Sync Wi-Fi
 
-2. Start the app
+## Clés API
 
-   ```bash
-   npx expo start
-   ```
+- Last.fm : EXPO_PUBLIC_LASTFM_API_KEY dans .env
+- Deezer : pas de clé requise
 
-In the output, you'll find options to open the app in a
+## Notes importantes
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Images Last.fm inutilisables → Deezer API pour les images
+- .npmrc : legacy-peer-deps=true
+- projectId EAS : 30a5b647-c5ea-4419-b655-aa9b6e97999a

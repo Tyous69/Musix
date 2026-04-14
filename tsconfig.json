@@ -1,13 +1,6 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    "strict": true,
-    "paths": {
-      "@/*": [
-        "./*"
-=======
     "strict": true,
     "jsx": "react-native",
     "ignoreDeprecations": "6.0",
@@ -15,25 +8,14 @@
     "paths": {
       "@/*": [
         "src/*"
->>>>>>> 6268c54 (debut app musix)
       ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-<<<<<<< HEAD
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ]
-=======
-    "strict": true
-  }
->>>>>>> 22da1b3 (Initial commit)
-=======
     ".expo/types/**/*.d.ts",
     "expo-env.d.ts",
     ".expo/types/**/*.ts"
   ]
->>>>>>> 6268c54 (debut app musix)
 }

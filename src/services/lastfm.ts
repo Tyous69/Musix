@@ -1,10 +1,5 @@
+import { LastfmAlbum, LastfmArtist, LastfmSearchResult } from "@/types/lastfm";
 import axios from "axios";
-import {
-  LastfmArtist,
-  LastfmAlbum,
-  LastfmSearchResult,
-} from "@/types/lastfm";
-
 
 const API_KEY = process.env.EXPO_PUBLIC_LASTFM_API_KEY;
 console.log("🔑 API Key:", API_KEY);
@@ -77,9 +72,38 @@ export const lastfm = {
 
   getImageUrl(
     images: { "#text": string; size: string }[],
-    size: "small" | "medium" | "large" | "extralarge" = "large"
+    size: "small" | "medium" | "large" | "extralarge" = "large",
   ): string | null {
     const img = images?.find((i) => i.size === size);
     return img?.["#text"] || images?.[images.length - 1]?.["#text"] || null;
+  },
+};
+
+export const deezer = {
+  async searchArtistImage(name: string): Promise<string | null> {
+    try {
+      // Prend uniquement le premier artiste si c'est un feat
+      const primaryArtist = name.split(",")[0].trim();
+      const { data } = await axios.get(
+        `https://api.deezer.com/search/artist?q=${encodeURIComponent(primaryArtist)}&limit=1`,
+      );
+      return data.data?.[0]?.picture_xl ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  async searchAlbumCover(
+    artist: string,
+    album: string,
+  ): Promise<string | null> {
+    try {
+      const { data } = await axios.get(
+        `https://api.deezer.com/search/album?q=${encodeURIComponent(artist + " " + album)}&limit=1`,
+      );
+      return data.data?.[0]?.cover_xl ?? null;
+    } catch {
+      return null;
+    }
   },
 };

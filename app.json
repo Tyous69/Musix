@@ -1,42 +1,6 @@
 {
   "expo": {
-<<<<<<< HEAD
-<<<<<<< HEAD
     "name": "Musix",
-    "slug": "musix",
-    "version": "1.0.0",
-    "scheme": "musix",
-    "platforms": [
-      "android"
-    ],
-    "android": {
-      "package": "com.musix.app",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#0F0F0F"
-      },
-      "permissions": [
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ]
-    },
-    "plugins": [
-      "expo-router",
-      "expo-sqlite"
-    ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "7bc273e4-9c31-4591-8c22-ce7101f9dee2"
-      }
-=======
-    "name": "musix",
-=======
-    "name": "Musix",
->>>>>>> 6268c54 (debut app musix)
     "slug": "musix",
     "version": "1.0.0",
     "scheme": "musix",
@@ -54,23 +18,14 @@
         "backgroundColor": "#0F0F0F"
       }
     },
-<<<<<<< HEAD
-    "web": {
-      "favicon": "./assets/favicon.png"
->>>>>>> 22da1b3 (Initial commit)
-=======
-    "plugins": [
-      "expo-router",
-      "expo-sqlite"
-    ],
+    "plugins": ["expo-router", "expo-sqlite"],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "eas": {
-        "projectId": "7bc273e4-9c31-4591-8c22-ce7101f9dee2"
+        "projectId": "30a5b647-c5ea-4419-b655-aa9b6e97999a"
       }
->>>>>>> 6268c54 (debut app musix)
     }
   }
 }

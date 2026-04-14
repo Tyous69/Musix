@@ -2,7 +2,6 @@ import { View, Text, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { usePlayerStore } from "@/stores/playerStore";
-
 export function MiniPlayer() {
   const router = useRouter();
   const { currentTrack, isPlaying, setIsPlaying, nextTrack } = usePlayerStore();
@@ -14,17 +13,14 @@ export function MiniPlayer() {
       onPress={() => router.push("/player")}
       activeOpacity={0.9}
       style={{
-        position: "absolute",
-        bottom: 0,
-        left: 8,
-        right: 8,
+        marginHorizontal: 8,
+        marginBottom: 8,
         backgroundColor: "#1A1A1A",
         borderRadius: 12,
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: 12,
         paddingVertical: 10,
-        marginBottom: 8,
       }}
     >
       {/* Cover */}

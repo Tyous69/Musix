@@ -6,17 +6,18 @@ export type Track = {
   artist: string;
   album: string;
   coverUrl: string | null;
-  previewUrl: string | null; // Deezer 30s preview
-  localUri: string | null;   // fichier local
+  previewUrl: string | null;
+  localUri: string | null;
 };
 
 type PlayerStore = {
   currentTrack: Track | null;
   queue: Track[];
   isPlaying: boolean;
-  position: number;      // en secondes
-  duration: number;      // en secondes
-  isMinimized: boolean;  // mini player ou full screen
+  position: number;
+  duration: number;
+  isMinimized: boolean;
+  seekFn: ((seconds: number) => void) | null;
 
   setTrack: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
@@ -24,6 +25,7 @@ type PlayerStore = {
   setPosition: (v: number) => void;
   setDuration: (v: number) => void;
   setIsMinimized: (v: boolean) => void;
+  setSeekFn: (fn: (seconds: number) => void) => void;
   nextTrack: () => void;
   prevTrack: () => void;
 };
@@ -35,6 +37,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   position: 0,
   duration: 0,
   isMinimized: true,
+  seekFn: null,
 
   setTrack: (track) => set({ currentTrack: track, position: 0 }),
   setQueue: (tracks) => set({ queue: tracks }),
@@ -42,6 +45,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   setPosition: (v) => set({ position: v }),
   setDuration: (v) => set({ duration: v }),
   setIsMinimized: (v) => set({ isMinimized: v }),
+  setSeekFn: (fn) => set({ seekFn: fn }),
 
   nextTrack: () => {
     const { queue, currentTrack } = get();

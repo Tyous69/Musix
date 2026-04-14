@@ -58,18 +58,27 @@ export default function AlbumScreen() {
     localUri: null,
   });
 
-  const handlePlayAll = () => {
-    if (tracks.length === 0) return;
+  const handlePlayTrack = async (track: any, index: number) => {
+    const trackArtist = track.artist?.name ?? artist ?? "";
+    const previewUrl = await deezer.searchTrackPreview(trackArtist, track.name);
     const queue = tracks.map((t: any) => buildTrack(t, coverImage));
+    // Met à jour la preview uniquement pour la track cliquée
+    queue[index] = { ...queue[index], previewUrl };
     setQueue(queue);
-    setTrack(queue[0]);
+    setTrack(queue[index]);
     setIsMinimized(true);
   };
 
-  const handlePlayTrack = (track: any, index: number) => {
+  const handlePlayAll = async () => {
+    if (tracks.length === 0) return;
+    // Fetch la preview de la première track pour démarrer vite
+    const firstTrack = tracks[0];
+    const trackArtist = firstTrack.artist?.name ?? artist ?? "";
+    const previewUrl = await deezer.searchTrackPreview(trackArtist, firstTrack.name);
     const queue = tracks.map((t: any) => buildTrack(t, coverImage));
+    queue[0] = { ...queue[0], previewUrl };
     setQueue(queue);
-    setTrack(queue[index]);
+    setTrack(queue[0]);
     setIsMinimized(true);
   };
 

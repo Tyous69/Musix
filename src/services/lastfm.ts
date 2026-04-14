@@ -93,6 +93,17 @@ export const deezer = {
     }
   },
 
+  async searchTrackPreview(artist: string, title: string): Promise<string | null> {
+    try {
+      const { data } = await axios.get(
+        `https://api.deezer.com/search/track?q=${encodeURIComponent(artist + " " + title)}&limit=1`
+      );
+      return data.data?.[0]?.preview ?? null;
+    } catch {
+      return null;
+    }
+  },
+
   async searchAlbumCover(
     artist: string,
     album: string,

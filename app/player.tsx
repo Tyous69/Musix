@@ -1,23 +1,23 @@
 import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  Dimensions,
+  View, Text, Image, TouchableOpacity, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import { usePlayerStore } from "@/stores/playerStore";
-import { useAudio } from "@/hooks/useAudio";
 
 const { width } = Dimensions.get("window");
 
 export default function PlayerScreen() {
   const router = useRouter();
-  const { currentTrack, isPlaying, position, duration } = usePlayerStore();
-  const { seek, togglePlay } = useAudio();
+  const {
+    currentTrack, isPlaying, position, duration,
+    setIsPlaying, seekFn, nextTrack, prevTrack,
+  } = usePlayerStore();
+
+  const togglePlay = () => setIsPlaying(!isPlaying);
+  const seek = (seconds: number) => seekFn?.(seconds);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -35,22 +35,18 @@ export default function PlayerScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-2">
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-down" size={28} color="white" />
         </TouchableOpacity>
-        <View className="items-center">
-          <Text className="text-gray-400 text-xs uppercase tracking-widest">
-            En écoute
-          </Text>
-        </View>
+        <Text className="text-gray-400 text-xs uppercase tracking-widest">
+          En écoute
+        </Text>
         <TouchableOpacity>
           <Ionicons name="ellipsis-horizontal" size={24} color="white" />
         </TouchableOpacity>
       </View>
 
-      {/* Cover */}
       <View className="items-center mt-8 mb-10">
         {currentTrack.coverUrl ? (
           <Image
@@ -68,7 +64,6 @@ export default function PlayerScreen() {
         )}
       </View>
 
-      {/* Track info */}
       <View className="px-8 mb-6">
         <Text className="text-white text-2xl font-bold" numberOfLines={1}>
           {currentTrack.title}
@@ -78,16 +73,15 @@ export default function PlayerScreen() {
         </Text>
       </View>
 
-      {/* Slider */}
       <View className="px-6">
         <Slider
           minimumValue={0}
           maximumValue={duration || 1}
           value={position}
           onSlidingComplete={seek}
-          minimumTrackTintColor="#FF6B35"
+          minimumTrackTintColor="#00BFA5"
           maximumTrackTintColor="#333"
-          thumbTintColor="#FF6B35"
+          thumbTintColor="#00BFA5"
         />
         <View className="flex-row justify-between mt-1">
           <Text className="text-gray-500 text-xs">{formatTime(position)}</Text>
@@ -95,34 +89,26 @@ export default function PlayerScreen() {
         </View>
       </View>
 
-      {/* Controls */}
       <View className="flex-row items-center justify-between px-10 mt-8">
         <TouchableOpacity>
           <Ionicons name="shuffle" size={24} color="#9E9E9E" />
         </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => usePlayerStore.getState().prevTrack()}>
+        <TouchableOpacity onPress={prevTrack}>
           <Ionicons name="play-skip-back" size={36} color="white" />
         </TouchableOpacity>
-
         <TouchableOpacity
           onPress={togglePlay}
           style={{
-            width: 64,
-            height: 64,
-            borderRadius: 32,
-            backgroundColor: "#FF6B35",
-            alignItems: "center",
-            justifyContent: "center",
+            width: 64, height: 64, borderRadius: 32,
+            backgroundColor: "#00BFA5",
+            alignItems: "center", justifyContent: "center",
           }}
         >
           <Ionicons name={isPlaying ? "pause" : "play"} size={32} color="white" />
         </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => usePlayerStore.getState().nextTrack()}>
+        <TouchableOpacity onPress={nextTrack}>
           <Ionicons name="play-skip-forward" size={36} color="white" />
         </TouchableOpacity>
-
         <TouchableOpacity>
           <Ionicons name="repeat" size={24} color="#9E9E9E" />
         </TouchableOpacity>

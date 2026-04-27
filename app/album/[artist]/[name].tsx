@@ -1,196 +1,249 @@
+import { useArtistInfo, useArtistTopAlbums } from "@/hooks/useLastfm";
+import { deezer } from "@/services/lastfm";
+import { LastfmAlbum } from "@/types/lastfm";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Dimensions,
   Image,
   ScrollView,
+  Text,
   TouchableOpacity,
-  ActivityIndicator,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
-import { lastfm, deezer } from "@/services/lastfm";
-import { LastfmAlbum } from "@/types/lastfm";
-import { usePlayerStore, Track } from "@/stores/playerStore";
 
-export default function AlbumScreen() {
-  const { artist, name } = useLocalSearchParams<{
-    artist: string;
-    name: string;
-  }>();
-  const router = useRouter();
+const { width } = Dimensions.get("window");
 
-  const [album, setAlbum] = useState<LastfmAlbum | null>(null);
-  const [coverImage, setCoverImage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const { setTrack, setQueue, setIsMinimized } = usePlayerStore();
+// Composant AlbumRow qui fetch sa propre cover Deezer
+function AlbumRow({
+  album,
+  artistName,
+}: {
+  album: LastfmAlbum;
+  artistName: string;
+}) {
+  const [cover, setCover] = useState<string | null>(null);
 
   useEffect(() => {
-    if (artist && name) {
-      Promise.all([
-        lastfm.getAlbumInfo(artist, name),
-        deezer.searchAlbumCover(artist, name),
-      ])
-        .then(([albumData, cover]) => {
-          setAlbum(albumData);
-          setCoverImage(cover);
+    deezer.searchAlbumCover(artistName, album.name).then(setCover);
+  }, [album.name, artistName]);
+
+  return (
+    <TouchableOpacity
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 16,
+      }}
+      onPress={() =>
+        router.push({
+          pathname: "/album/[artist]/[name]",
+          params: { artist: artistName, name: album.name },
         })
-        .catch(console.error)
-        .finally(() => setLoading(false));
-    }
-  }, [artist, name]);
+      }
+    >
+      {cover ? (
+        <Image
+          source={{ uri: cover }}
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: 8,
+            backgroundColor: "#1A1A1A",
+          }}
+        />
+      ) : (
+        <View
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: 8,
+            backgroundColor: "#1A1A1A",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="musical-notes" size={24} color="#9E9E9E" />
+        </View>
+      )}
+      <View style={{ flex: 1, marginLeft: 14 }}>
+        <Text
+          style={{ color: "white", fontSize: 15, fontWeight: "700" }}
+          numberOfLines={1}
+        >
+          {album.name}
+        </Text>
+        <Text style={{ color: "#9E9E9E", fontSize: 13, marginTop: 2 }}>
+          {artistName}
+        </Text>
+      </View>
+      <TouchableOpacity>
+        <Ionicons name="ellipsis-vertical" size={18} color="#9E9E9E" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
 
-  const formatDuration = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
+export default function ArtistScreen() {
+  const { name } = useLocalSearchParams<{ name: string }>();
+  const { data: artist, isLoading } = useArtistInfo(name);
+  const { data: albums } = useArtistTopAlbums(name);
+  const [artistImage, setArtistImage] = useState<string | null>(null);
 
-  const buildTrack = (track: any, cover: string | null): Track => ({
-    id: `${artist}-${track.name}`,
-    title: track.name,
-    artist: track.artist?.name ?? artist ?? "",
-    album: album?.name ?? name ?? "",
-    coverUrl: cover,
-    previewUrl: null,
-    localUri: null,
-  });
+  useEffect(() => {
+    if (name) deezer.searchArtistImage(name).then(setArtistImage);
+  }, [name]);
 
-  const handlePlayTrack = async (track: any, index: number) => {
-    const trackArtist = track.artist?.name ?? artist ?? "";
-    const previewUrl = await deezer.searchTrackPreview(trackArtist, track.name);
-    const queue = tracks.map((t: any) => buildTrack(t, coverImage));
-    // Met à jour la preview uniquement pour la track cliquée
-    queue[index] = { ...queue[index], previewUrl };
-    setQueue(queue);
-    setTrack(queue[index]);
-    setIsMinimized(true);
-  };
-
-  const handlePlayAll = async () => {
-    if (tracks.length === 0) return;
-    // Fetch la preview de la première track pour démarrer vite
-    const firstTrack = tracks[0];
-    const trackArtist = firstTrack.artist?.name ?? artist ?? "";
-    const previewUrl = await deezer.searchTrackPreview(trackArtist, firstTrack.name);
-    const queue = tracks.map((t: any) => buildTrack(t, coverImage));
-    queue[0] = { ...queue[0], previewUrl };
-    setQueue(queue);
-    setTrack(queue[0]);
-    setIsMinimized(true);
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
-        <ActivityIndicator color="#FF6B35" size="large" />
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#0A0A0A",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color="#00BFA5" />
       </View>
     );
   }
 
-  const tracks = Array.isArray(album?.tracks?.track)
-    ? album.tracks.track
-    : album?.tracks?.track
-      ? [album.tracks.track]
-      : [];
+  const bio = artist?.bio?.summary?.replace(/<a[^>]*>.*?<\/a>/g, "").trim();
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={["top"]}>
+    <View style={{ flex: 1, backgroundColor: "#0A0A0A" }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header back button */}
-        <TouchableOpacity onPress={() => router.back()} className="px-4 py-2">
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
+        <SafeAreaView>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+            }}
+          >
+            <TouchableOpacity onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <Text
+              style={{
+                color: "#9E9E9E",
+                fontSize: 12,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+              }}
+            >
+              FROM "SEARCH"
+            </Text>
+            <TouchableOpacity>
+              <Ionicons name="ellipsis-vertical" size={22} color="white" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
 
-        {/* Cover */}
-        <View className="items-center px-8 pb-6">
-          {coverImage ? (
+        {/* Cover image */}
+        <View style={{ paddingHorizontal: 16, marginBottom: 24 }}>
+          {artistImage ? (
             <Image
-              source={{ uri: coverImage }}
-              style={{ width: 240, height: 240, borderRadius: 12 }}
+              source={{ uri: artistImage }}
+              style={{
+                width: width - 32,
+                height: width - 32,
+                borderRadius: 12,
+              }}
               resizeMode="cover"
             />
           ) : (
             <View
-              style={{ width: 240, height: 240, borderRadius: 12 }}
-              className="bg-surface items-center justify-center"
+              style={{
+                width: width - 32,
+                height: width - 32,
+                borderRadius: 12,
+                backgroundColor: "#1A1A1A",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <Ionicons name="musical-notes" size={80} color="#9E9E9E" />
+              <Ionicons name="person" size={80} color="#9E9E9E" />
             </View>
           )}
-
-          {/* Album info */}
-          <Text className="text-white text-2xl font-bold mt-4 text-center">
-            {album?.name ?? name}
-          </Text>
-          <Text className="text-gray-400 text-base mt-1">{artist}</Text>
-          {tracks.length > 0 && (
-            <Text className="text-gray-500 text-sm mt-1">
-              {tracks.length} titres
-            </Text>
-          )}
         </View>
 
-        {/* Play All button */}
-        <View className="px-4 mb-6">
-          <TouchableOpacity
-            className="flex-row items-center justify-center bg-primary rounded-full py-3 gap-2"
-            onPress={handlePlayAll}
+        {/* Title + bio */}
+        <View
+          style={{
+            paddingHorizontal: 20,
+            alignItems: "center",
+            marginBottom: 32,
+          }}
+        >
+          <Text
+            style={{
+              color: "white",
+              fontSize: 36,
+              fontWeight: "900",
+              textAlign: "center",
+              letterSpacing: -1,
+            }}
           >
-            <Ionicons name="play" size={20} color="white" />
-            <Text className="text-white font-semibold text-base">
-              Tout lire
+            {artist?.name}
+          </Text>
+          {artist?.listeners && (
+            <Text
+              style={{
+                color: "#9E9E9E",
+                fontSize: 14,
+                marginTop: 8,
+                textAlign: "center",
+              }}
+            >
+              {parseInt(artist.listeners).toLocaleString()} listeners
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Track list */}
-        <View className="px-4">
-          {tracks.length === 0 ? (
-            <Text className="text-gray-500 text-center py-8">
-              Aucune piste disponible
+          )}
+          {bio && (
+            <Text
+              style={{
+                color: "#9E9E9E",
+                fontSize: 13,
+                marginTop: 12,
+                textAlign: "center",
+                lineHeight: 20,
+              }}
+              numberOfLines={3}
+            >
+              {bio}
             </Text>
-          ) : (
-            tracks.map((track: any, index: number) => (
-              <TouchableOpacity
-                key={track.name + index}
-                className="flex-row items-center py-3 border-b border-surface"
-                onPress={() => handlePlayTrack(track, index)}
-              >
-                <Text className="text-gray-500 w-8 text-sm">{index + 1}</Text>
-                <View className="flex-1">
-                  <Text
-                    className="text-white text-sm font-medium"
-                    numberOfLines={1}
-                  >
-                    {track.name}
-                  </Text>
-                  {track.artist?.name && track.artist.name !== artist && (
-                    <Text className="text-gray-500 text-xs mt-0.5">
-                      {track.artist.name}
-                    </Text>
-                  )}
-                </View>
-                {track.duration && track.duration !== "0" ? (
-                  <Text className="text-gray-500 text-sm">
-                    {formatDuration(Number(track.duration))}
-                  </Text>
-                ) : null}
-                <Ionicons
-                  name="ellipsis-vertical"
-                  size={16}
-                  color="#9E9E9E"
-                  style={{ marginLeft: 12 }}
-                />
-              </TouchableOpacity>
-            ))
           )}
         </View>
 
-        <View style={{ height: 100 }} />
+        {/* Albums list */}
+        <View style={{ paddingHorizontal: 20 }}>
+          <Text
+            style={{
+              color: "white",
+              fontSize: 18,
+              fontWeight: "800",
+              marginBottom: 16,
+            }}
+          >
+            Top Albums
+          </Text>
+          {albums?.map((album, index) => (
+            <AlbumRow
+              key={`${album.name}-${index}`}
+              album={album}
+              artistName={name}
+            />
+          ))}
+        </View>
+
+        <View style={{ height: 120 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

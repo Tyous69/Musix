@@ -1,5 +1,4 @@
 import { useSearchArtists } from "@/hooks/useLastfm";
-import { lastfm } from "@/services/lastfm";
 import { LastfmArtist } from "@/types/lastfm";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
@@ -7,7 +6,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -15,16 +14,37 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const GENRES = [
+  { name: "Kpop", color: "#7BC744" },
+  { name: "Indie", color: "#D63BAA" },
+  { name: "R&B", color: "#4A5FC1" },
+  { name: "Pop", color: "#C97820" },
+];
+
+const BROWSE = [
+  { name: "Made for You", color: "#2BA8C8" },
+  { name: "Released", color: "#7B3EC1" },
+  { name: "Music Charts", color: "#3A5FC1" },
+  { name: "Podcasts", color: "#C13A5F" },
+  { name: "Bollywood", color: "#8B6914" },
+  { name: "Pop Fusion", color: "#1A7B5F" },
+];
+
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const { data: artists, isLoading } = useSearchArtists(query);
 
   function renderArtist({ item }: { item: LastfmArtist }) {
-    const imageUrl = lastfm.getImageUrl(item.image, "large");
-
     return (
       <TouchableOpacity
-        className="flex-row items-center px-4 py-3 border-b border-border"
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 20,
+          paddingVertical: 14,
+          borderBottomWidth: 0.5,
+          borderBottomColor: "#1A1A1A",
+        }}
         onPress={() =>
           router.push({
             pathname: "/artist/[name]",
@@ -32,62 +52,91 @@ export default function SearchScreen() {
           })
         }
       >
-        {imageUrl ? (
-          <Image
-            source={{ uri: imageUrl }}
-            className="w-14 h-14 rounded-full bg-surface"
-          />
-        ) : (
-          <View className="w-14 h-14 rounded-full bg-surface items-center justify-center">
-            <Ionicons name="person" size={24} color="#9E9E9E" />
-          </View>
-        )}
-        <View className="ml-4 flex-1">
-          <Text className="text-text-primary font-semibold text-base">
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: "#1A1A1A",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="person" size={24} color="#9E9E9E" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 16 }}>
+          <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
             {item.name}
           </Text>
           {item.listeners && (
-            <Text className="text-text-secondary text-sm mt-0.5">
+            <Text style={{ color: "#9E9E9E", fontSize: 13, marginTop: 2 }}>
               {parseInt(item.listeners).toLocaleString()} listeners
             </Text>
           )}
         </View>
-        <Ionicons name="chevron-forward" size={20} color="#9E9E9E" />
+        <Ionicons name="chevron-forward" size={18} color="#9E9E9E" />
       </TouchableOpacity>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <View className="px-4 pt-4 pb-2">
-        <Text className="text-text-primary text-2xl font-bold mb-4">
-          Search
-        </Text>
-        <View className="flex-row items-center bg-surface rounded-xl px-4 py-3">
-          <Ionicons name="search" size={20} color="#9E9E9E" />
-          <TextInput
-            className="flex-1 ml-3 text-text-primary text-base"
-            placeholder="Artists, songs, podcasts"
-            placeholderTextColor="#9E9E9E"
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery("")}>
-              <Ionicons name="close-circle" size={20} color="#9E9E9E" />
-            </TouchableOpacity>
-          )}
-        </View>
+    <View style={{ flex: 1, backgroundColor: "#0A0A0A" }}>
+      <View style={{ backgroundColor: "#0D2B2B" }}>
+        <SafeAreaView>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: 16,
+              gap: 10,
+            }}
+          >
+            <Ionicons name="musical-note" size={28} color="#00BFA5" />
+            <Text style={{ color: "#00BFA5", fontSize: 28, fontWeight: "800" }}>
+              Search
+            </Text>
+          </View>
+          <View
+            style={{
+              marginHorizontal: 20,
+              marginBottom: 16,
+              backgroundColor: "#E8E8E8",
+              borderRadius: 30,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
+          >
+            <Ionicons name="search" size={20} color="#666" />
+            <TextInput
+              style={{ flex: 1, marginLeft: 10, color: "#333", fontSize: 15 }}
+              placeholder="Songs, Artists, Podcasts & More"
+              placeholderTextColor="#999"
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+            />
+            {query.length > 0 && (
+              <TouchableOpacity onPress={() => setQuery("")}>
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeAreaView>
       </View>
 
       {isLoading && (
-        <View className="flex-1 items-center justify-center">
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
           <ActivityIndicator size="large" color="#00BFA5" />
         </View>
       )}
 
-      {!isLoading && query.length > 1 && artists && artists.length > 0 && (
+      {!isLoading && query.length > 1 && artists && (
         <FlatList
           data={artists}
           keyExtractor={(item, index) => `${item.name}-${index}`}
@@ -96,37 +145,83 @@ export default function SearchScreen() {
         />
       )}
 
-      {!isLoading && query.length === 0 && (
-        <View className="px-4 mt-6">
-          <Text className="text-text-primary text-lg font-bold mb-4">
-            Browse categories
-          </Text>
-          <View className="flex-row flex-wrap gap-3">
-            {GENRES.map((genre) => (
-              <TouchableOpacity
-                key={genre.name}
-                className="rounded-xl px-5 py-4 w-[47%]"
-                style={{ backgroundColor: genre.color }}
-              >
-                <Text className="text-white font-bold text-base">
-                  {genre.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      {query.length === 0 && (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 28 }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontWeight: "800",
+                marginBottom: 16,
+              }}
+            >
+              Your Top Genres
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              {GENRES.map((g) => (
+                <TouchableOpacity
+                  key={g.name}
+                  style={{
+                    width: "47%",
+                    height: 100,
+                    backgroundColor: g.color,
+                    borderRadius: 12,
+                    padding: 14,
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  <Text
+                    style={{ color: "white", fontSize: 16, fontWeight: "800" }}
+                  >
+                    {g.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 28,
+              paddingBottom: 120,
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontWeight: "800",
+                marginBottom: 16,
+              }}
+            >
+              Browse All
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              {BROWSE.map((g) => (
+                <TouchableOpacity
+                  key={g.name}
+                  style={{
+                    width: "47%",
+                    height: 100,
+                    backgroundColor: g.color,
+                    borderRadius: 12,
+                    padding: 14,
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  <Text
+                    style={{ color: "white", fontSize: 16, fontWeight: "800" }}
+                  >
+                    {g.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
-
-const GENRES = [
-  { name: "Pop", color: "#E91E8C" },
-  { name: "Hip-Hop", color: "#FF6B35" },
-  { name: "Rock", color: "#7C3AED" },
-  { name: "Electronic", color: "#00BFA5" },
-  { name: "Jazz", color: "#F59E0B" },
-  { name: "Classical", color: "#3B82F6" },
-  { name: "R&B", color: "#EC4899" },
-  { name: "Metal", color: "#6B7280" },
-];

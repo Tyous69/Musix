@@ -1,12 +1,11 @@
-import { useArtistInfo, useArtistTopAlbums } from "@/hooks/useLastfm";
-import { deezer } from "@/services/lastfm";
+import { deezer, lastfm } from "@/services/lastfm";
+import { Track, usePlayerStore } from "@/stores/playerStore";
 import { LastfmAlbum } from "@/types/lastfm";
-import Ionicons from "@expo/vector-icons/Ionicons";
-import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   ScrollView,
   Text,
@@ -15,89 +14,76 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
+export default function AlbumScreen() {
+  const { artist, name } = useLocalSearchParams<{
+    artist: string;
+    name: string;
+  }>();
+  const router = useRouter();
 
-// Composant AlbumRow qui fetch sa propre cover Deezer
-function AlbumRow({
-  album,
-  artistName,
-}: {
-  album: LastfmAlbum;
-  artistName: string;
-}) {
-  const [cover, setCover] = useState<string | null>(null);
+  const [album, setAlbum] = useState<LastfmAlbum | null>(null);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const { setTrack, setQueue, setIsMinimized } = usePlayerStore();
 
   useEffect(() => {
-    deezer.searchAlbumCover(artistName, album.name).then(setCover);
-  }, [album.name, artistName]);
-
-  return (
-    <TouchableOpacity
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 16,
-      }}
-      onPress={() =>
-        router.push({
-          pathname: "/album/[artist]/[name]",
-          params: { artist: artistName, name: album.name },
+    if (artist && name) {
+      Promise.all([
+        lastfm.getAlbumInfo(artist, name),
+        deezer.searchAlbumCover(artist, name),
+      ])
+        .then(([albumData, cover]) => {
+          setAlbum(albumData);
+          setCoverImage(cover);
         })
-      }
-    >
-      {cover ? (
-        <Image
-          source={{ uri: cover }}
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 8,
-            backgroundColor: "#1A1A1A",
-          }}
-        />
-      ) : (
-        <View
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 8,
-            backgroundColor: "#1A1A1A",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="musical-notes" size={24} color="#9E9E9E" />
-        </View>
-      )}
-      <View style={{ flex: 1, marginLeft: 14 }}>
-        <Text
-          style={{ color: "white", fontSize: 15, fontWeight: "700" }}
-          numberOfLines={1}
-        >
-          {album.name}
-        </Text>
-        <Text style={{ color: "#9E9E9E", fontSize: 13, marginTop: 2 }}>
-          {artistName}
-        </Text>
-      </View>
-      <TouchableOpacity>
-        <Ionicons name="ellipsis-vertical" size={18} color="#9E9E9E" />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-}
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [artist, name]);
 
-export default function ArtistScreen() {
-  const { name } = useLocalSearchParams<{ name: string }>();
-  const { data: artist, isLoading } = useArtistInfo(name);
-  const { data: albums } = useArtistTopAlbums(name);
-  const [artistImage, setArtistImage] = useState<string | null>(null);
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
-  useEffect(() => {
-    if (name) deezer.searchArtistImage(name).then(setArtistImage);
-  }, [name]);
+  const buildTrack = (track: any, cover: string | null): Track => ({
+    id: `${artist}-${track.name}`,
+    title: track.name,
+    artist: track.artist?.name ?? artist ?? "",
+    album: album?.name ?? name ?? "",
+    coverUrl: cover,
+    previewUrl: null,
+    localUri: null,
+  });
 
-  if (isLoading) {
+  const handlePlayTrack = async (track: any, index: number) => {
+    const trackArtist = track.artist?.name ?? artist ?? "";
+    const previewUrl = await deezer.searchTrackPreview(trackArtist, track.name);
+    const queue = tracks.map((t: any) => buildTrack(t, coverImage));
+    queue[index] = { ...queue[index], previewUrl };
+    setQueue(queue);
+    setTrack(queue[index]);
+    setIsMinimized(true);
+  };
+
+  const handlePlayAll = async () => {
+    if (tracks.length === 0) return;
+    const firstTrack = tracks[0];
+    const trackArtist = firstTrack.artist?.name ?? artist ?? "";
+    const previewUrl = await deezer.searchTrackPreview(
+      trackArtist,
+      firstTrack.name,
+    );
+    const queue = tracks.map((t: any) => buildTrack(t, coverImage));
+    queue[0] = { ...queue[0], previewUrl };
+    setQueue(queue);
+    setTrack(queue[0]);
+    setIsMinimized(true);
+  };
+
+  if (loading) {
     return (
       <View
         style={{
@@ -107,139 +93,178 @@ export default function ArtistScreen() {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator size="large" color="#00BFA5" />
+        <ActivityIndicator color="#00BFA5" size="large" />
       </View>
     );
   }
 
-  const bio = artist?.bio?.summary?.replace(/<a[^>]*>.*?<\/a>/g, "").trim();
+  const tracks = Array.isArray(album?.tracks?.track)
+    ? album.tracks.track
+    : album?.tracks?.track
+      ? [album.tracks.track]
+      : [];
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0A0A0A" }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <SafeAreaView>
-          <View
+      <SafeAreaView edges={["top"]}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+          }}
+        >
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 20,
-              paddingVertical: 12,
+              color: "#9E9E9E",
+              fontSize: 12,
+              letterSpacing: 1.5,
+              textTransform: "uppercase",
             }}
           >
-            <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text
-              style={{
-                color: "#9E9E9E",
-                fontSize: 12,
-                letterSpacing: 1.5,
-                textTransform: "uppercase",
-              }}
-            >
-              FROM "SEARCH"
-            </Text>
-            <TouchableOpacity>
-              <Ionicons name="ellipsis-vertical" size={22} color="white" />
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
+            FROM "ARTIST"
+          </Text>
+          <TouchableOpacity>
+            <Ionicons name="ellipsis-vertical" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
-        {/* Cover image */}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Cover */}
         <View style={{ paddingHorizontal: 16, marginBottom: 24 }}>
-          {artistImage ? (
+          {coverImage ? (
             <Image
-              source={{ uri: artistImage }}
-              style={{
-                width: width - 32,
-                height: width - 32,
-                borderRadius: 12,
-              }}
+              source={{ uri: coverImage }}
+              style={{ width: "100%", aspectRatio: 1, borderRadius: 12 }}
               resizeMode="cover"
             />
           ) : (
             <View
               style={{
-                width: width - 32,
-                height: width - 32,
+                width: "100%",
+                aspectRatio: 1,
                 borderRadius: 12,
                 backgroundColor: "#1A1A1A",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Ionicons name="person" size={80} color="#9E9E9E" />
+              <Ionicons name="musical-notes" size={80} color="#9E9E9E" />
             </View>
           )}
         </View>
 
-        {/* Title + bio */}
+        {/* Album info */}
         <View
           style={{
             paddingHorizontal: 20,
             alignItems: "center",
-            marginBottom: 32,
+            marginBottom: 24,
           }}
         >
           <Text
             style={{
               color: "white",
-              fontSize: 36,
+              fontSize: 28,
               fontWeight: "900",
               textAlign: "center",
-              letterSpacing: -1,
+              letterSpacing: -0.5,
             }}
           >
-            {artist?.name}
+            {album?.name ?? name}
           </Text>
-          {artist?.listeners && (
-            <Text
-              style={{
-                color: "#9E9E9E",
-                fontSize: 14,
-                marginTop: 8,
-                textAlign: "center",
-              }}
-            >
-              {parseInt(artist.listeners).toLocaleString()} listeners
-            </Text>
-          )}
-          {bio && (
-            <Text
-              style={{
-                color: "#9E9E9E",
-                fontSize: 13,
-                marginTop: 12,
-                textAlign: "center",
-                lineHeight: 20,
-              }}
-              numberOfLines={3}
-            >
-              {bio}
+          <Text style={{ color: "#9E9E9E", fontSize: 15, marginTop: 6 }}>
+            {artist}
+          </Text>
+          {tracks.length > 0 && (
+            <Text style={{ color: "#555", fontSize: 13, marginTop: 4 }}>
+              {tracks.length} titres
             </Text>
           )}
         </View>
 
-        {/* Albums list */}
-        <View style={{ paddingHorizontal: 20 }}>
-          <Text
+        {/* Play All */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <TouchableOpacity
+            onPress={handlePlayAll}
             style={{
-              color: "white",
-              fontSize: 18,
-              fontWeight: "800",
-              marginBottom: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#00BFA5",
+              borderRadius: 30,
+              paddingVertical: 14,
+              gap: 8,
             }}
           >
-            Top Albums
-          </Text>
-          {albums?.map((album, index) => (
-            <AlbumRow
-              key={`${album.name}-${index}`}
-              album={album}
-              artistName={name}
-            />
-          ))}
+            <Ionicons name="play" size={20} color="black" />
+            <Text style={{ color: "black", fontWeight: "800", fontSize: 15 }}>
+              Tout lire
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Track list */}
+        <View style={{ paddingHorizontal: 20 }}>
+          {tracks.length === 0 ? (
+            <Text
+              style={{
+                color: "#555",
+                textAlign: "center",
+                paddingVertical: 32,
+              }}
+            >
+              Aucune piste disponible
+            </Text>
+          ) : (
+            tracks.map((track: any, index: number) => (
+              <TouchableOpacity
+                key={track.name + index}
+                onPress={() => handlePlayTrack(track, index)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 12,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: "#1A1A1A",
+                }}
+              >
+                <Text style={{ color: "#555", width: 28, fontSize: 13 }}>
+                  {index + 1}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{ color: "white", fontSize: 14, fontWeight: "600" }}
+                    numberOfLines={1}
+                  >
+                    {track.name}
+                  </Text>
+                  {track.artist?.name && track.artist.name !== artist && (
+                    <Text
+                      style={{ color: "#9E9E9E", fontSize: 12, marginTop: 2 }}
+                    >
+                      {track.artist.name}
+                    </Text>
+                  )}
+                </View>
+                {track.duration && track.duration !== "0" && (
+                  <Text
+                    style={{ color: "#555", fontSize: 13, marginRight: 12 }}
+                  >
+                    {formatDuration(Number(track.duration))}
+                  </Text>
+                )}
+                <Ionicons name="ellipsis-vertical" size={16} color="#555" />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={{ height: 120 }} />

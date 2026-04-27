@@ -82,21 +82,48 @@ export const lastfm = {
 export const deezer = {
   async searchArtistImage(name: string): Promise<string | null> {
     try {
-      // Prend uniquement le premier artiste si c'est un feat
-      const primaryArtist = name.split(",")[0].trim();
+      // Garde le nom complet, enlève juste les caractères spéciaux
+      const cleaned = name.replace(/[^a-zA-Z0-9\s,]/g, " ").trim();
+
+      console.log("🔍 Searching for:", cleaned);
+
       const { data } = await axios.get(
-        `https://api.deezer.com/search/artist?q=${encodeURIComponent(primaryArtist)}&limit=1`,
+        `https://api.deezer.com/search/artist?q=${encodeURIComponent(cleaned)}&limit=10`,
       );
-      return data.data?.[0]?.picture_xl ?? null;
+
+      const artists = data.data ?? [];
+      console.log(
+        "🎤 Artists returned:",
+        artists.map((a: any) => `${a.name} (${a.nb_fan} fans)`),
+      );
+
+      // Trouve le meilleur match par similarité de nom + nb_fan
+      const lowerName = name.toLowerCase();
+      const scored = artists.map((a: any) => {
+        const aName = a.name.toLowerCase();
+        let score = (a.nb_fan ?? 0) / 1_000_000; // base score = popularité
+        if (aName === lowerName) score += 1000; // exact match
+        if (aName.startsWith(lowerName.split(",")[0].toLowerCase()))
+          score += 10;
+        return { ...a, score };
+      });
+
+      scored.sort((a: any, b: any) => b.score - a.score);
+      console.log("🏆 Winner:", scored[0]?.name);
+
+      return scored[0]?.picture_xl ?? null;
     } catch {
       return null;
     }
   },
 
-  async searchTrackPreview(artist: string, title: string): Promise<string | null> {
+  async searchTrackPreview(
+    artist: string,
+    title: string,
+  ): Promise<string | null> {
     try {
       const { data } = await axios.get(
-        `https://api.deezer.com/search/track?q=${encodeURIComponent(artist + " " + title)}&limit=1`
+        `https://api.deezer.com/search/track?q=${encodeURIComponent(artist + " " + title)}&limit=1`,
       );
       return data.data?.[0]?.preview ?? null;
     } catch {

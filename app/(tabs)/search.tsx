@@ -1,6 +1,7 @@
 import { useSearchArtists } from "@/hooks/useLastfm";
 import { LastfmArtist } from "@/types/lastfm";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -81,7 +82,10 @@ export default function SearchScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0A0A0A" }}>
-      <View style={{ backgroundColor: "#0D2B2B" }}>
+      <LinearGradient
+        colors={["#0D2B2B", "#0A0A0A"]}
+        style={{ paddingBottom: 20 }}
+      >
         <SafeAreaView>
           <View
             style={{
@@ -126,7 +130,7 @@ export default function SearchScreen() {
             )}
           </View>
         </SafeAreaView>
-      </View>
+      </LinearGradient>
 
       {isLoading && (
         <View

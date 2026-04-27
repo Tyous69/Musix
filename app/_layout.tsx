@@ -1,11 +1,14 @@
-import { initDatabase } from "@/db/schema";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import { useEffect } from "react";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { View } from "react-native";
 import { MiniPlayer } from "@/components/player/MiniPlayer";
+import { initDatabase } from "@/db/schema";
 import { useAudio } from "@/hooks/useAudio";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack, useSegments } from "expo-router";
+import { useEffect } from "react";
+import { View } from "react-native";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import "../global.css";
 
 const queryClient = new QueryClient();
@@ -17,6 +20,8 @@ function AudioEngine() {
 
 function RootLayoutInner() {
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
+  const isInTabs = segments[0] === "(tabs)";
 
   useEffect(() => {
     initDatabase()
@@ -28,16 +33,18 @@ function RootLayoutInner() {
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }} />
       <AudioEngine />
-      <View
-        style={{
-          position: "absolute",
-          bottom: insets.bottom + 60,
-          left: 0,
-          right: 0,
-        }}
-      >
-        <MiniPlayer />
-      </View>
+      {!isInTabs && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+          }}
+        >
+          <MiniPlayer />
+        </View>
+      )}
     </View>
   );
 }

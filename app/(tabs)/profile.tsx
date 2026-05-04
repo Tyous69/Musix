@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TEAL = "#00BFA5";
 const BG = "#0A0A0A";
-const HEADER_BG = "#0D2B2B";
 const CARD_BG = "#1A1A1A";
 const MUTED = "#9E9E9E";
 
@@ -57,9 +57,13 @@ const menuItems = [
 export default function ProfileScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      {/* Header teal comme les autres pages */}
-      <View style={{ backgroundColor: HEADER_BG }}>
+      {/* Même LinearGradient que search.tsx */}
+      <LinearGradient
+        colors={["#0D2B2B", "#0A0A0A"]}
+        style={{ paddingBottom: 28 }}
+      >
         <SafeAreaView>
+          {/* Titre */}
           <View
             style={{
               flexDirection: "row",
@@ -71,66 +75,58 @@ export default function ProfileScreen() {
             }}
           >
             <Ionicons name="person" size={28} color={TEAL} />
-            <Text
-              style={{ color: TEAL, fontSize: 28, fontWeight: "800" }}
-            >
+            <Text style={{ color: TEAL, fontSize: 28, fontWeight: "800" }}>
               Profile
             </Text>
           </View>
+
+          {/* Avatar centré dans le gradient */}
+          <View style={{ alignItems: "center", paddingBottom: 4 }}>
+            <View
+              style={{
+                width: 86,
+                height: 86,
+                borderRadius: 43,
+                borderWidth: 2.5,
+                borderColor: TEAL,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#1A3333",
+                marginBottom: 12,
+              }}
+            >
+              <Text style={{ fontSize: 32, color: TEAL, fontWeight: "800" }}>
+                C
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontWeight: "800",
+                marginBottom: 4,
+              }}
+            >
+              chandrama
+            </Text>
+            <Text style={{ color: MUTED, fontSize: 13 }}>
+              chandrama@music.local
+            </Text>
+          </View>
         </SafeAreaView>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* Avatar block */}
-        <View
-          style={{
-            alignItems: "center",
-            paddingVertical: 28,
-            backgroundColor: HEADER_BG,
-            marginBottom: 8,
-          }}
-        >
-          <View
-            style={{
-              width: 86,
-              height: 86,
-              borderRadius: 43,
-              borderWidth: 2.5,
-              borderColor: TEAL,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#1A3333",
-              marginBottom: 12,
-            }}
-          >
-            <Text style={{ fontSize: 32, color: TEAL, fontWeight: "800" }}>
-              C
-            </Text>
-          </View>
-          <Text
-            style={{
-              color: "white",
-              fontSize: 20,
-              fontWeight: "800",
-              marginBottom: 4,
-            }}
-          >
-            chandrama
-          </Text>
-          <Text style={{ color: MUTED, fontSize: 13 }}>
-            chandrama@music.local
-          </Text>
-        </View>
-
         {/* Stats */}
         <View
           style={{
             flexDirection: "row",
             marginHorizontal: 20,
-            marginVertical: 16,
+            marginTop: 20,
+            marginBottom: 16,
             backgroundColor: CARD_BG,
             borderRadius: 14,
             padding: 20,

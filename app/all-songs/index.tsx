@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -112,7 +113,10 @@ export default function AllSongsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      <View style={{ backgroundColor: HEADER_BG }}>
+      <LinearGradient
+        colors={["#0D2B2B", "#0A0A0A"]}
+        style={{ paddingBottom: 28 }}
+      >
         <SafeAreaView>
           <View
             style={{
@@ -135,6 +139,8 @@ export default function AllSongsScreen() {
               {MOCK_SONGS.length} tracks
             </Text>
           </View>
+
+
 
           {/* Search */}
           <View
@@ -164,7 +170,7 @@ export default function AllSongsScreen() {
             )}
           </View>
         </SafeAreaView>
-      </View>
+        </LinearGradient>
 
       {/* Play all bar */}
       <View

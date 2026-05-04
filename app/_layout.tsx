@@ -1,9 +1,10 @@
+import AnimatedSplash from "@/components/AnimatedSplash";
 import { MiniPlayer } from "@/components/player/MiniPlayer";
 import { initDatabase } from "@/db/schema";
 import { useAudio } from "@/hooks/useAudio";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useSegments } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import {
   SafeAreaProvider,
@@ -50,6 +51,16 @@ function RootLayoutInner() {
 }
 
 export default function RootLayout() {
+  const [isSplashVisible, setIsSplashVisible] = useState(true);
+
+  const handleAnimationFinish = () => {
+    setIsSplashVisible(false);
+  };
+
+  if (isSplashVisible) {
+    return <AnimatedSplash onAnimationFinish={handleAnimationFinish} />;
+  }
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>

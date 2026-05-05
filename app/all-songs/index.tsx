@@ -1,7 +1,9 @@
+import { getAllTracks } from "@/db/schema";
+import { Track, usePlayerStore } from "@/stores/playerStore";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FlatList,
   Text,
@@ -13,43 +15,68 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const TEAL = "#00BFA5";
 const BG = "#0A0A0A";
-const HEADER_BG = "#0D2B2B";
 const CARD_BG = "#1A1A1A";
 const MUTED = "#9E9E9E";
 
-// Mock data — à remplacer par SQLite
-const MOCK_SONGS = [
-  { id: "1", title: "Blue Bird", artist: "Ikimono-gakari", duration: "4:12", liked: true },
-  { id: "2", title: "Gurenge", artist: "LiSA", duration: "3:57", liked: true },
-  { id: "3", title: "Unravel", artist: "TK from Ling Tosite Sigure", duration: "3:34", liked: false },
-  { id: "4", title: "Again", artist: "YUI", duration: "4:01", liked: false },
-  { id: "5", title: "Silhouette", artist: "KANA-BOON", duration: "3:41", liked: true },
-  { id: "6", title: "Crossing Field", artist: "LiSA", duration: "4:24", liked: false },
-  { id: "7", title: "Rain", artist: "Sid", duration: "4:35", liked: true },
-  { id: "8", title: "Shape of You", artist: "Ed Sheeran", duration: "3:53", liked: false },
-  { id: "9", title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", liked: false },
-  { id: "10", title: "Coffee & Jazz Mix", artist: "Various", duration: "58:00", liked: true },
-];
-
-type Song = typeof MOCK_SONGS[0];
+type DBTrack = {
+  id: number;
+  title: string;
+  artist: string;
+  local_file_path: string;
+  duration_ms: number | null;
+};
 
 export default function AllSongsScreen() {
+  const [songs, setSongs] = useState<DBTrack[]>([]);
   const [query, setQuery] = useState("");
-  const [likedMap, setLikedMap] = useState<Record<string, boolean>>(
-    Object.fromEntries(MOCK_SONGS.map((s) => [s.id, s.liked]))
-  );
+  const [loading, setLoading] = useState(true);
+  const { setTrack, setQueue } = usePlayerStore();
 
-  const filtered = MOCK_SONGS.filter(
+  useEffect(() => {
+    getAllTracks()
+      .then(setSongs)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = songs.filter(
     (s) =>
       s.title.toLowerCase().includes(query.toLowerCase()) ||
-      s.artist.toLowerCase().includes(query.toLowerCase())
+      s.artist.toLowerCase().includes(query.toLowerCase()),
   );
 
-  function toggleLike(id: string) {
-    setLikedMap((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
+  const buildTrack = (s: DBTrack): Track => ({
+    id: String(s.id),
+    title: s.title,
+    artist: s.artist,
+    album: "",
+    coverUrl: null,
+    previewUrl: null,
+    localUri: s.local_file_path,
+  });
 
-  function renderSong({ item, index }: { item: Song; index: number }) {
+  const handlePlay = (s: DBTrack, index: number) => {
+    const queue = filtered.map(buildTrack);
+    setQueue(queue);
+    setTrack(queue[index]);
+  };
+
+  const handlePlayAll = () => {
+    if (filtered.length === 0) return;
+    const queue = filtered.map(buildTrack);
+    setQueue(queue);
+    setTrack(queue[0]);
+  };
+
+  const formatDuration = (ms: number | null) => {
+    if (!ms) return "";
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  function renderSong({ item, index }: { item: DBTrack; index: number }) {
     return (
       <TouchableOpacity
         style={{
@@ -61,9 +88,9 @@ export default function AllSongsScreen() {
           borderBottomColor: "#1A1A1A",
           gap: 14,
         }}
+        onPress={() => handlePlay(item, index)}
         activeOpacity={0.7}
       >
-        {/* Index / Cover placeholder */}
         <View
           style={{
             width: 48,
@@ -78,7 +105,6 @@ export default function AllSongsScreen() {
             {index + 1}
           </Text>
         </View>
-
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: "white", fontSize: 15, fontWeight: "700" }}
@@ -86,24 +112,18 @@ export default function AllSongsScreen() {
           >
             {item.title}
           </Text>
-          <Text style={{ color: MUTED, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+          <Text
+            style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
+            numberOfLines={1}
+          >
             {item.artist}
           </Text>
         </View>
-
-        <Text style={{ color: MUTED, fontSize: 12 }}>{item.duration}</Text>
-
-        <TouchableOpacity
-          onPress={() => toggleLike(item.id)}
-          style={{ padding: 6 }}
-        >
-          <Ionicons
-            name={likedMap[item.id] ? "heart" : "heart-outline"}
-            size={20}
-            color={likedMap[item.id] ? TEAL : MUTED}
-          />
-        </TouchableOpacity>
-
+        {item.duration_ms && (
+          <Text style={{ color: MUTED, fontSize: 12 }}>
+            {formatDuration(item.duration_ms)}
+          </Text>
+        )}
         <TouchableOpacity style={{ padding: 6 }}>
           <Ionicons name="ellipsis-vertical" size={18} color={MUTED} />
         </TouchableOpacity>
@@ -132,17 +152,16 @@ export default function AllSongsScreen() {
               <Ionicons name="arrow-back" size={24} color={TEAL} />
             </TouchableOpacity>
             <Ionicons name="musical-notes" size={26} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}>
+            <Text
+              style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}
+            >
               All Songs
             </Text>
             <Text style={{ color: MUTED, fontSize: 13 }}>
-              {MOCK_SONGS.length} tracks
+              {songs.length} tracks
             </Text>
           </View>
 
-
-
-          {/* Search */}
           <View
             style={{
               marginHorizontal: 20,
@@ -170,9 +189,8 @@ export default function AllSongsScreen() {
             )}
           </View>
         </SafeAreaView>
-        </LinearGradient>
+      </LinearGradient>
 
-      {/* Play all bar */}
       <View
         style={{
           flexDirection: "row",
@@ -185,6 +203,7 @@ export default function AllSongsScreen() {
         }}
       >
         <TouchableOpacity
+          onPress={handlePlayAll}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -221,7 +240,7 @@ export default function AllSongsScreen() {
 
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderSong}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
@@ -229,8 +248,21 @@ export default function AllSongsScreen() {
           <View style={{ alignItems: "center", paddingTop: 60 }}>
             <Ionicons name="musical-notes-outline" size={60} color="#333" />
             <Text style={{ color: "#555", fontSize: 16, marginTop: 16 }}>
-              No songs found
+              {loading ? "Loading..." : "No songs yet"}
             </Text>
+            {!loading && (
+              <Text
+                style={{
+                  color: "#444",
+                  fontSize: 13,
+                  marginTop: 8,
+                  textAlign: "center",
+                  paddingHorizontal: 40,
+                }}
+              >
+                Sync your MP3s via Wi-Fi Sync
+              </Text>
+            )}
           </View>
         }
       />

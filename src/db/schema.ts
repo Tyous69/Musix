@@ -185,3 +185,50 @@ export async function getStats(): Promise<{
     totalPlaylists: playlists?.count ?? 0,
   };
 }
+
+export async function linkLastfmTrack(
+  title: string,
+  artist: string,
+  localUri: string,
+): Promise<void> {
+  const db = await getDatabase();
+
+  // Cherche si l'artiste existe
+  await db.execAsync(
+    `INSERT OR IGNORE INTO artists (name) VALUES ('${artist.replace(/'/g, "''")}');`,
+  );
+  const artistRow = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM artists WHERE name = '${artist.replace(/'/g, "''")}';`,
+  );
+
+  // Met à jour ou crée la track avec la localUri
+  const existing = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM tracks WHERE title = '${title.replace(/'/g, "''")}' AND artist_id = ${artistRow?.id ?? "NULL"};`,
+  );
+
+  if (existing) {
+    await db.execAsync(
+      `UPDATE tracks SET local_file_path = '${localUri.replace(/'/g, "''")}' WHERE id = ${existing.id};`,
+    );
+  } else {
+    await db.execAsync(`
+      INSERT INTO tracks (artist_id, title, local_file_path)
+      VALUES (${artistRow?.id ?? "NULL"}, '${title.replace(/'/g, "''")}', '${localUri.replace(/'/g, "''")}');
+    `);
+  }
+}
+
+export async function getLinkedUri(
+  title: string,
+  artist: string,
+): Promise<string | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ local_file_path: string | null }>(`
+    SELECT t.local_file_path FROM tracks t
+    LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE t.title = '${title.replace(/'/g, "''")}' 
+    AND (a.name = '${artist.replace(/'/g, "''")}' OR t.artist_id IS NULL)
+    LIMIT 1;
+  `);
+  return row?.local_file_path ?? null;
+}

@@ -1,6 +1,8 @@
+import { getLikedTracks, toggleLikedTrack } from "@/db/schema";
+import { Track, usePlayerStore } from "@/stores/playerStore";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -10,24 +12,63 @@ const HEADER_BG = "#0D2B2B";
 const CARD_BG = "#1A1A1A";
 const MUTED = "#9E9E9E";
 
-const MOCK_LIKED = [
-  { id: "1", title: "Blue Bird", artist: "Ikimono-gakari", duration: "4:12" },
-  { id: "2", title: "Gurenge", artist: "LiSA", duration: "3:57" },
-  { id: "5", title: "Silhouette", artist: "KANA-BOON", duration: "3:41" },
-  { id: "7", title: "Rain", artist: "Sid", duration: "4:35" },
-  { id: "10", title: "Coffee & Jazz Mix", artist: "Various", duration: "58:00" },
-];
-
-type Song = typeof MOCK_LIKED[0];
+type DBTrack = {
+  id: number;
+  title: string;
+  artist: string;
+  local_file_path: string;
+  duration_ms: number | null;
+};
 
 export default function LikedSongsScreen() {
-  const [liked, setLiked] = useState<Song[]>(MOCK_LIKED);
+  const [liked, setLiked] = useState<DBTrack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { setTrack, setQueue } = usePlayerStore();
 
-  function unlike(id: string) {
+  useEffect(() => {
+    getLikedTracks()
+      .then(setLiked)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const buildTrack = (s: DBTrack): Track => ({
+    id: String(s.id),
+    title: s.title,
+    artist: s.artist,
+    album: "",
+    coverUrl: null,
+    previewUrl: null,
+    localUri: s.local_file_path,
+  });
+
+  const handlePlay = (s: DBTrack, index: number) => {
+    const queue = liked.map(buildTrack);
+    setQueue(queue);
+    setTrack(queue[index]);
+  };
+
+  const handlePlayAll = () => {
+    if (liked.length === 0) return;
+    const queue = liked.map(buildTrack);
+    setQueue(queue);
+    setTrack(queue[0]);
+  };
+
+  const handleUnlike = async (id: number) => {
+    await toggleLikedTrack(id);
     setLiked((prev) => prev.filter((s) => s.id !== id));
-  }
+  };
 
-  function renderSong({ item, index }: { item: Song; index: number }) {
+  const formatDuration = (ms: number | null) => {
+    if (!ms) return "";
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  function renderSong({ item, index }: { item: DBTrack; index: number }) {
     return (
       <TouchableOpacity
         style={{
@@ -39,6 +80,7 @@ export default function LikedSongsScreen() {
           borderBottomColor: "#1A1A1A",
           gap: 14,
         }}
+        onPress={() => handlePlay(item, index)}
         activeOpacity={0.7}
       >
         <View
@@ -62,13 +104,20 @@ export default function LikedSongsScreen() {
           >
             {item.title}
           </Text>
-          <Text style={{ color: MUTED, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+          <Text
+            style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
+            numberOfLines={1}
+          >
             {item.artist}
           </Text>
         </View>
-        <Text style={{ color: MUTED, fontSize: 12 }}>{item.duration}</Text>
+        {item.duration_ms ? (
+          <Text style={{ color: MUTED, fontSize: 12 }}>
+            {formatDuration(item.duration_ms)}
+          </Text>
+        ) : null}
         <TouchableOpacity
-          onPress={() => unlike(item.id)}
+          onPress={() => handleUnlike(item.id)}
           style={{ padding: 6 }}
         >
           <Ionicons name="heart" size={20} color={TEAL} />
@@ -98,7 +147,9 @@ export default function LikedSongsScreen() {
               <Ionicons name="arrow-back" size={24} color={TEAL} />
             </TouchableOpacity>
             <Ionicons name="heart" size={26} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}>
+            <Text
+              style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}
+            >
               Liked Songs
             </Text>
             <Text style={{ color: MUTED, fontSize: 13 }}>
@@ -108,7 +159,6 @@ export default function LikedSongsScreen() {
         </SafeAreaView>
       </View>
 
-      {/* Play all bar */}
       <View
         style={{
           flexDirection: "row",
@@ -121,6 +171,7 @@ export default function LikedSongsScreen() {
         }}
       >
         <TouchableOpacity
+          onPress={handlePlayAll}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -157,7 +208,7 @@ export default function LikedSongsScreen() {
 
       <FlatList
         data={liked}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderSong}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
@@ -165,7 +216,7 @@ export default function LikedSongsScreen() {
           <View style={{ alignItems: "center", paddingTop: 60 }}>
             <Ionicons name="heart-outline" size={60} color="#333" />
             <Text style={{ color: "#555", fontSize: 16, marginTop: 16 }}>
-              No liked songs yet
+              {loading ? "Loading..." : "No liked songs yet"}
             </Text>
             <Text
               style={{
@@ -176,7 +227,7 @@ export default function LikedSongsScreen() {
                 paddingHorizontal: 40,
               }}
             >
-              Tap the heart on any song to save it here
+              Tape le cœur sur une chanson dans All Songs
             </Text>
           </View>
         }

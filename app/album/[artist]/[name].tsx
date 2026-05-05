@@ -1,3 +1,4 @@
+import { getAllTracks, getLinkedUri, linkLastfmTrack } from "@/db/schema";
 import { deezer, lastfm } from "@/services/lastfm";
 import { Track, usePlayerStore } from "@/stores/playerStore";
 import { LastfmAlbum } from "@/types/lastfm";
@@ -6,13 +7,25 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Image,
+  Modal,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const TEAL = "#00BFA5";
+const MUTED = "#9E9E9E";
+
+type LocalFile = {
+  id: number;
+  title: string;
+  artist: string;
+  local_file_path: string;
+};
 
 export default function AlbumScreen() {
   const { artist, name } = useLocalSearchParams<{
@@ -24,6 +37,10 @@ export default function AlbumScreen() {
   const [album, setAlbum] = useState<LastfmAlbum | null>(null);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTrack, setSelectedTrack] = useState<any>(null);
+  const [linkedUris, setLinkedUris] = useState<Record<string, string>>({});
 
   const { setTrack, setQueue, setIsMinimized } = usePlayerStore();
 
@@ -32,15 +49,38 @@ export default function AlbumScreen() {
       Promise.all([
         lastfm.getAlbumInfo(artist, name),
         deezer.searchAlbumCover(artist, name),
+        getAllTracks(),
       ])
-        .then(([albumData, cover]) => {
+        .then(([albumData, cover, files]) => {
           setAlbum(albumData);
           setCoverImage(cover);
+          setLocalFiles(files);
         })
         .catch(console.error)
         .finally(() => setLoading(false));
     }
   }, [artist, name]);
+
+  // Charge les URIs déjà liées pour les tracks de cet album
+  useEffect(() => {
+    if (!album?.tracks?.track) return;
+    const trackList = Array.isArray(album.tracks.track)
+      ? album.tracks.track
+      : [album.tracks.track];
+
+    Promise.all(
+      trackList.map(async (t: any) => {
+        const uri = await getLinkedUri(t.name, t.artist?.name ?? artist ?? "");
+        return { key: t.name, uri };
+      }),
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      results.forEach(({ key, uri }) => {
+        if (uri) map[key] = uri;
+      });
+      setLinkedUris(map);
+    });
+  }, [album]);
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -55,14 +95,26 @@ export default function AlbumScreen() {
     album: album?.name ?? name ?? "",
     coverUrl: cover,
     previewUrl: null,
-    localUri: null,
+    localUri: linkedUris[track.name] ?? null,
   });
 
   const handlePlayTrack = async (track: any, index: number) => {
-    const trackArtist = track.artist?.name ?? artist ?? "";
-    const previewUrl = await deezer.searchTrackPreview(trackArtist, track.name);
     const queue = tracks.map((t: any) => buildTrack(t, coverImage));
-    queue[index] = { ...queue[index], previewUrl };
+    const localUri = linkedUris[track.name] ?? null;
+
+    if (localUri) {
+      // Fichier local disponible — joue directement
+      queue[index] = { ...queue[index], localUri };
+    } else {
+      // Pas de fichier local — fetch preview Deezer
+      const trackArtist = track.artist?.name ?? artist ?? "";
+      const previewUrl = await deezer.searchTrackPreview(
+        trackArtist,
+        track.name,
+      );
+      queue[index] = { ...queue[index], previewUrl };
+    }
+
     setQueue(queue);
     setTrack(queue[index]);
     setIsMinimized(true);
@@ -70,17 +122,45 @@ export default function AlbumScreen() {
 
   const handlePlayAll = async () => {
     if (tracks.length === 0) return;
-    const firstTrack = tracks[0];
-    const trackArtist = firstTrack.artist?.name ?? artist ?? "";
-    const previewUrl = await deezer.searchTrackPreview(
-      trackArtist,
-      firstTrack.name,
-    );
     const queue = tracks.map((t: any) => buildTrack(t, coverImage));
-    queue[0] = { ...queue[0], previewUrl };
+    const firstTrack = tracks[0];
+    const localUri = linkedUris[firstTrack.name] ?? null;
+
+    if (localUri) {
+      queue[0] = { ...queue[0], localUri };
+    } else {
+      const trackArtist = firstTrack.artist?.name ?? artist ?? "";
+      const previewUrl = await deezer.searchTrackPreview(
+        trackArtist,
+        firstTrack.name,
+      );
+      queue[0] = { ...queue[0], previewUrl };
+    }
+
     setQueue(queue);
     setTrack(queue[0]);
     setIsMinimized(true);
+  };
+
+  const openLinkModal = (track: any) => {
+    setSelectedTrack(track);
+    setModalVisible(true);
+  };
+
+  const handleLinkFile = async (file: LocalFile) => {
+    if (!selectedTrack) return;
+    const trackArtist = selectedTrack.artist?.name ?? artist ?? "";
+    await linkLastfmTrack(
+      selectedTrack.name,
+      trackArtist,
+      file.local_file_path,
+    );
+    setLinkedUris((prev) => ({
+      ...prev,
+      [selectedTrack.name]: file.local_file_path,
+    }));
+    setModalVisible(false);
+    setSelectedTrack(null);
   };
 
   if (loading) {
@@ -93,7 +173,7 @@ export default function AlbumScreen() {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator color="#00BFA5" size="large" />
+        <ActivityIndicator color={TEAL} size="large" />
       </View>
     );
   }
@@ -107,7 +187,6 @@ export default function AlbumScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#0A0A0A" }}>
       <SafeAreaView edges={["top"]}>
-        {/* Header */}
         <View
           style={{
             flexDirection: "row",
@@ -122,7 +201,7 @@ export default function AlbumScreen() {
           </TouchableOpacity>
           <Text
             style={{
-              color: "#9E9E9E",
+              color: MUTED,
               fontSize: 12,
               letterSpacing: 1.5,
               textTransform: "uppercase",
@@ -156,7 +235,7 @@ export default function AlbumScreen() {
                 justifyContent: "center",
               }}
             >
-              <Ionicons name="musical-notes" size={80} color="#9E9E9E" />
+              <Ionicons name="musical-notes" size={80} color={MUTED} />
             </View>
           )}
         </View>
@@ -180,7 +259,7 @@ export default function AlbumScreen() {
           >
             {album?.name ?? name}
           </Text>
-          <Text style={{ color: "#9E9E9E", fontSize: 15, marginTop: 6 }}>
+          <Text style={{ color: MUTED, fontSize: 15, marginTop: 6 }}>
             {artist}
           </Text>
           {tracks.length > 0 && (
@@ -198,7 +277,7 @@ export default function AlbumScreen() {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#00BFA5",
+              backgroundColor: TEAL,
               borderRadius: 30,
               paddingVertical: 14,
               gap: 8,
@@ -247,21 +326,31 @@ export default function AlbumScreen() {
                     {track.name}
                   </Text>
                   {track.artist?.name && track.artist.name !== artist && (
-                    <Text
-                      style={{ color: "#9E9E9E", fontSize: 12, marginTop: 2 }}
-                    >
+                    <Text style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>
                       {track.artist.name}
                     </Text>
                   )}
                 </View>
+                {/* Indicateur fichier local lié */}
+                {linkedUris[track.name] && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={16}
+                    color={TEAL}
+                    style={{ marginRight: 8 }}
+                  />
+                )}
                 {track.duration && track.duration !== "0" && (
-                  <Text
-                    style={{ color: "#555", fontSize: 13, marginRight: 12 }}
-                  >
+                  <Text style={{ color: "#555", fontSize: 13, marginRight: 8 }}>
                     {formatDuration(Number(track.duration))}
                   </Text>
                 )}
-                <Ionicons name="ellipsis-vertical" size={16} color="#555" />
+                <TouchableOpacity
+                  onPress={() => openLinkModal(track)}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="ellipsis-vertical" size={16} color="#555" />
+                </TouchableOpacity>
               </TouchableOpacity>
             ))
           )}
@@ -269,6 +358,128 @@ export default function AlbumScreen() {
 
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Modale de liaison MP3 */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#141414",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingTop: 20,
+              paddingBottom: 40,
+              maxHeight: "70%",
+            }}
+          >
+            {/* Header modale */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 20,
+                marginBottom: 8,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{ color: "white", fontSize: 16, fontWeight: "800" }}
+                >
+                  Lier un fichier local
+                </Text>
+                <Text
+                  style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
+                  numberOfLines={1}
+                >
+                  {selectedTrack?.name}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={MUTED} />
+              </TouchableOpacity>
+            </View>
+
+            {localFiles.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Ionicons name="folder-open-outline" size={48} color="#333" />
+                <Text
+                  style={{
+                    color: "#555",
+                    fontSize: 14,
+                    marginTop: 12,
+                    textAlign: "center",
+                    paddingHorizontal: 32,
+                  }}
+                >
+                  Aucun MP3 local disponible.{"\n"}Sync via Wi-Fi d'abord.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={localFiles}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => handleLinkFile(item)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 20,
+                      paddingVertical: 14,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: "#1A1A1A",
+                      gap: 14,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 8,
+                        backgroundColor: "#1A1A1A",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons name="musical-note" size={20} color={TEAL} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: "white",
+                          fontSize: 14,
+                          fontWeight: "600",
+                        }}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                      <Text
+                        style={{ color: MUTED, fontSize: 12, marginTop: 2 }}
+                      >
+                        {item.artist}
+                      </Text>
+                    </View>
+                    <Ionicons name="link" size={18} color={TEAL} />
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

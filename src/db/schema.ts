@@ -40,6 +40,7 @@ export async function initDatabase(): Promise<void> {
       local_file_path TEXT,
       duration_ms INTEGER,
       play_count INTEGER DEFAULT 0,
+      is_liked INTEGER DEFAULT 0,
       added_at INTEGER DEFAULT (strftime('%s', 'now')),
       FOREIGN KEY (artist_id) REFERENCES artists(id) ON DELETE CASCADE,
       FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE SET NULL
@@ -60,6 +61,15 @@ export async function initDatabase(): Promise<void> {
       FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
     );
   `);
+
+  // Migration — ajoute is_liked si elle n'existe pas
+  try {
+    await db.execAsync(
+      `ALTER TABLE tracks ADD COLUMN is_liked INTEGER DEFAULT 0;`,
+    );
+  } catch (e) {
+    // Colonne déjà existante, on ignore
+  }
 }
 
 export async function insertTrackFromFile(
@@ -99,6 +109,53 @@ export async function getAllTracks(): Promise<
     artist: string;
     local_file_path: string;
     duration_ms: number | null;
+    is_liked: number;
+  }[]
+> {
+  const db = await getDatabase();
+  return await db.getAllAsync(`
+    SELECT t.id, t.title, t.local_file_path, t.duration_ms, t.is_liked,
+           COALESCE(a.name, 'Unknown Artist') as artist
+    FROM tracks t
+    LEFT JOIN artists a ON t.artist_id = a.id
+    ORDER BY t.added_at DESC;
+  `);
+}
+
+export async function deleteTrack(id: number): Promise<void> {
+  const db = await getDatabase();
+
+  const track = await db.getFirstAsync<{ local_file_path: string }>(
+    `SELECT local_file_path FROM tracks WHERE id = ${id};`,
+  );
+
+  if (track?.local_file_path) {
+    try {
+      const { deleteAsync } = await import("expo-file-system/legacy");
+      await deleteAsync(track.local_file_path, { idempotent: true });
+    } catch (e) {
+      console.error("File delete error:", e);
+    }
+  }
+
+  await db.execAsync(`DELETE FROM tracks WHERE id = ${id};`);
+}
+
+export async function toggleLikedTrack(id: number): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(`
+    UPDATE tracks SET is_liked = CASE WHEN is_liked = 1 THEN 0 ELSE 1 END
+    WHERE id = ${id};
+  `);
+}
+
+export async function getLikedTracks(): Promise<
+  {
+    id: number;
+    title: string;
+    artist: string;
+    local_file_path: string;
+    duration_ms: number | null;
   }[]
 > {
   const db = await getDatabase();
@@ -107,6 +164,24 @@ export async function getAllTracks(): Promise<
            COALESCE(a.name, 'Unknown Artist') as artist
     FROM tracks t
     LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE t.is_liked = 1
     ORDER BY t.added_at DESC;
   `);
+}
+
+export async function getStats(): Promise<{
+  totalTracks: number;
+  totalPlaylists: number;
+}> {
+  const db = await getDatabase();
+  const tracks = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM tracks;`,
+  );
+  const playlists = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM playlists;`,
+  );
+  return {
+    totalTracks: tracks?.count ?? 0,
+    totalPlaylists: playlists?.count ?? 0,
+  };
 }

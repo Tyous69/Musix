@@ -1,10 +1,11 @@
-import { getAllTracks } from "@/db/schema";
+import { deleteTrack, getAllTracks, toggleLikedTrack } from "@/db/schema";
 import { Track, usePlayerStore } from "@/stores/playerStore";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   FlatList,
   Text,
   TextInput,
@@ -24,6 +25,7 @@ type DBTrack = {
   artist: string;
   local_file_path: string;
   duration_ms: number | null;
+  is_liked: number;
 };
 
 export default function AllSongsScreen() {
@@ -68,6 +70,29 @@ export default function AllSongsScreen() {
     setTrack(queue[0]);
   };
 
+  const handleDelete = (item: DBTrack) => {
+    Alert.alert("Supprimer", `Supprimer "${item.title}" ?`, [
+      { text: "Annuler", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await deleteTrack(item.id);
+          setSongs((prev) => prev.filter((s) => s.id !== item.id));
+        },
+      },
+    ]);
+  };
+
+  const handleToggleLike = async (item: DBTrack) => {
+    await toggleLikedTrack(item.id);
+    setSongs((prev) =>
+      prev.map((s) =>
+        s.id === item.id ? { ...s, is_liked: s.is_liked ? 0 : 1 } : s,
+      ),
+    );
+  };
+
   const formatDuration = (ms: number | null) => {
     if (!ms) return "";
     const s = Math.floor(ms / 1000);
@@ -105,6 +130,7 @@ export default function AllSongsScreen() {
             {index + 1}
           </Text>
         </View>
+
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: "white", fontSize: 15, fontWeight: "700" }}
@@ -119,13 +145,29 @@ export default function AllSongsScreen() {
             {item.artist}
           </Text>
         </View>
-        {item.duration_ms && (
+
+        {item.duration_ms ? (
           <Text style={{ color: MUTED, fontSize: 12 }}>
             {formatDuration(item.duration_ms)}
           </Text>
-        )}
-        <TouchableOpacity style={{ padding: 6 }}>
-          <Ionicons name="ellipsis-vertical" size={18} color={MUTED} />
+        ) : null}
+
+        <TouchableOpacity
+          onPress={() => handleToggleLike(item)}
+          style={{ padding: 6 }}
+        >
+          <Ionicons
+            name={item.is_liked ? "heart" : "heart-outline"}
+            size={20}
+            color={item.is_liked ? TEAL : MUTED}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => handleDelete(item)}
+          style={{ padding: 6 }}
+        >
+          <Ionicons name="trash-outline" size={18} color="#E05C5C" />
         </TouchableOpacity>
       </TouchableOpacity>
     );

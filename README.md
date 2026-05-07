@@ -31,4 +31,4 @@
 
 - Images Last.fm inutilisables → Deezer API pour les images
 - .npmrc : legacy-peer-deps=true
-- projectId EAS : 30a5b647-c5ea-4419-b655-aa9b6e97999a
+- projectId EAS : [projectId]

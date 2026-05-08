@@ -202,11 +202,13 @@ export async function getLikedTracks(): Promise<
     artist: string;
     local_file_path: string;
     duration_ms: number | null;
+    is_liked: number;
+    cover_url: string | null;
   }[]
 > {
   const db = await getDatabase();
   return await db.getAllAsync(`
-    SELECT t.id, t.title, t.local_file_path, t.duration_ms,
+    SELECT t.id, t.title, t.local_file_path, t.duration_ms, t.is_liked, t.cover_url,
            COALESCE(a.name, 'Unknown Artist') as artist
     FROM tracks t
     LEFT JOIN artists a ON t.artist_id = a.id

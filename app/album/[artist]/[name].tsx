@@ -154,6 +154,7 @@ export default function AlbumScreen() {
       selectedTrack.name,
       trackArtist,
       file.local_file_path,
+      coverImage, // 👈 passe la cover de l'album
     );
     setLinkedUris((prev) => ({
       ...prev,

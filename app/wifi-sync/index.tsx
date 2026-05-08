@@ -81,7 +81,13 @@ export default function WifiSyncScreen() {
     );
 
     try {
-      const destPath = `${FileSystem.documentDirectory}${file.name}`;
+      const destPath = `${FileSystem.documentDirectory}musix_downloads/${file.name}`;
+
+      // Crée le dossier si besoin
+      await FileSystem.makeDirectoryAsync(
+        `${FileSystem.documentDirectory}musix_downloads/`,
+        { intermediates: true },
+      );
 
       const downloadResumable = FileSystem.createDownloadResumable(
         `http://${ip.trim()}:3000/file/${fileId}`,

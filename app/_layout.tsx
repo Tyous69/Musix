@@ -3,7 +3,7 @@ import SplashAnimation from "@/components/SplashAnimation";
 import { initDatabase } from "@/db/schema";
 import { useAudio } from "@/hooks/useAudio";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import * as ExpoSplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
@@ -24,6 +24,7 @@ function AudioEngine() {
 
 function RootLayoutInner() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const [dbReady, setDbReady] = useState(false);
   const [animDone, setAnimDone] = useState(false);
 
@@ -36,7 +37,6 @@ function RootLayoutInner() {
       .catch((err) => console.error("❌ Database error:", err));
   }, []);
 
-  // Cache le splash natif seulement quand DB prête
   useEffect(() => {
     if (dbReady) ExpoSplashScreen.hideAsync();
   }, [dbReady]);
@@ -45,29 +45,38 @@ function RootLayoutInner() {
     setAnimDone(true);
   }, []);
 
-  // DB pas encore prête — on attend (splash natif reste visible)
   if (!dbReady) return null;
+  if (!animDone) return <SplashAnimation onFinish={handleAnimFinish} />;
 
-  // DB prête mais animation pas finie
-  if (!animDone) {
-    return <SplashAnimation onFinish={handleAnimFinish} />;
-  }
+  // Sur le player screen — pas de MiniPlayer
+  const isPlayerScreen = pathname === "/player";
 
-  // Tout prêt — affiche l'app
+  // Sur les screens avec tab bar (tabs) — MiniPlayer au-dessus de la tab bar
+  const isTabScreen =
+    pathname === "/" ||
+    pathname.startsWith("/(tabs)") ||
+    pathname === "/search" ||
+    pathname === "/library" ||
+    pathname === "/profile";
+
+  const miniPlayerBottom = isTabScreen ? insets.bottom + 60 : insets.bottom + 8;
+
   return (
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }} />
       <AudioEngine />
-      <View
-        style={{
-          position: "absolute",
-          bottom: insets.bottom + 60,
-          left: 0,
-          right: 0,
-        }}
-      >
-        <MiniPlayer />
-      </View>
+      {!isPlayerScreen && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: miniPlayerBottom,
+            left: 0,
+            right: 0,
+          }}
+        >
+          <MiniPlayer />
+        </View>
+      )}
     </View>
   );
 }

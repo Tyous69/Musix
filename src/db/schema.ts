@@ -10,6 +10,7 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 }
 
 export async function initDatabase(): Promise<void> {
+  await cleanMissingFiles();
   const db = await getDatabase();
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
@@ -41,6 +42,7 @@ export async function initDatabase(): Promise<void> {
       duration_ms INTEGER,
       play_count INTEGER DEFAULT 0,
       is_liked INTEGER DEFAULT 0,
+      source TEXT DEFAULT 'download',
       added_at INTEGER DEFAULT (strftime('%s', 'now')),
       FOREIGN KEY (artist_id) REFERENCES artists(id) ON DELETE CASCADE,
       FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE SET NULL
@@ -62,14 +64,20 @@ export async function initDatabase(): Promise<void> {
     );
   `);
 
-  // Migration — ajoute is_liked si elle n'existe pas
+  // Migrations
   try {
     await db.execAsync(
       `ALTER TABLE tracks ADD COLUMN is_liked INTEGER DEFAULT 0;`,
     );
-  } catch (e) {
-    // Colonne déjà existante, on ignore
-  }
+  } catch (e) {}
+  try {
+    await db.execAsync(
+      `ALTER TABLE tracks ADD COLUMN source TEXT DEFAULT 'download';`,
+    );
+  } catch (e) {}
+  try {
+    await db.execAsync(`ALTER TABLE tracks ADD COLUMN cover_url TEXT;`);
+  } catch (e) {}
 }
 
 export async function insertTrackFromFile(
@@ -92,12 +100,26 @@ export async function insertTrackFromFile(
     `SELECT id FROM artists WHERE name = '${artistName.replace(/'/g, "''")}';`,
   );
 
+  // Fetch cover Deezer
+  let coverUrl: string | null = null;
+  try {
+    const { deezer } = await import("@/services/lastfm");
+    coverUrl = await deezer.searchAlbumCover(artistName, title);
+    if (!coverUrl) {
+      coverUrl = await deezer.searchArtistImage(artistName);
+    }
+  } catch (e) {
+    // Pas de cover disponible, on continue sans
+  }
+
   await db.execAsync(`
-    INSERT OR IGNORE INTO tracks (artist_id, title, local_file_path)
+    INSERT OR IGNORE INTO tracks (artist_id, title, local_file_path, source, cover_url)
     VALUES (
       ${artist?.id ?? "NULL"},
       '${title.replace(/'/g, "''")}',
-      '${filePath.replace(/'/g, "''")}'
+      '${filePath.replace(/'/g, "''")}',
+      'download',
+      ${coverUrl ? `'${coverUrl.replace(/'/g, "''")}'` : "NULL"}
     );
   `);
 }
@@ -110,14 +132,38 @@ export async function getAllTracks(): Promise<
     local_file_path: string;
     duration_ms: number | null;
     is_liked: number;
+    cover_url: string | null;
   }[]
 > {
   const db = await getDatabase();
   return await db.getAllAsync(`
-    SELECT t.id, t.title, t.local_file_path, t.duration_ms, t.is_liked,
+    SELECT t.id, t.title, t.local_file_path, t.duration_ms, t.is_liked, t.cover_url,
            COALESCE(a.name, 'Unknown Artist') as artist
     FROM tracks t
     LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE t.source = 'download'
+    ORDER BY t.added_at DESC;
+  `);
+}
+
+export async function getLinkedTracks(): Promise<
+  {
+    id: number;
+    title: string;
+    artist: string;
+    local_file_path: string;
+    duration_ms: number | null;
+    is_liked: number;
+    cover_url: string | null;
+  }[]
+> {
+  const db = await getDatabase();
+  return await db.getAllAsync(`
+    SELECT t.id, t.title, t.local_file_path, t.duration_ms, t.is_liked, t.cover_url,
+           COALESCE(a.name, 'Unknown Artist') as artist
+    FROM tracks t
+    LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE t.source = 'lastfm'
     ORDER BY t.added_at DESC;
   `);
 }
@@ -190,10 +236,10 @@ export async function linkLastfmTrack(
   title: string,
   artist: string,
   localUri: string,
+  coverUrl?: string | null,
 ): Promise<void> {
   const db = await getDatabase();
 
-  // Cherche si l'artiste existe
   await db.execAsync(
     `INSERT OR IGNORE INTO artists (name) VALUES ('${artist.replace(/'/g, "''")}');`,
   );
@@ -201,19 +247,27 @@ export async function linkLastfmTrack(
     `SELECT id FROM artists WHERE name = '${artist.replace(/'/g, "''")}';`,
   );
 
-  // Met à jour ou crée la track avec la localUri
   const existing = await db.getFirstAsync<{ id: number }>(
     `SELECT id FROM tracks WHERE title = '${title.replace(/'/g, "''")}' AND artist_id = ${artistRow?.id ?? "NULL"};`,
   );
 
+  // Sécurise l'URL de la cover pour le SQL (gère le cas où elle est null ou undefined)
+  const safeCoverUrl = coverUrl ? `'${coverUrl.replace(/'/g, "''")}'` : "NULL";
+
   if (existing) {
+    // 👈 ICI : On ajoute la mise à jour de cover_url
     await db.execAsync(
-      `UPDATE tracks SET local_file_path = '${localUri.replace(/'/g, "''")}' WHERE id = ${existing.id};`,
+      `UPDATE tracks 
+       SET local_file_path = '${localUri.replace(/'/g, "''")}', 
+           source = 'lastfm', 
+           cover_url = ${safeCoverUrl} 
+       WHERE id = ${existing.id};`,
     );
   } else {
+    // 👈 ICI : On ajoute cover_url dans les colonnes et les valeurs
     await db.execAsync(`
-      INSERT INTO tracks (artist_id, title, local_file_path)
-      VALUES (${artistRow?.id ?? "NULL"}, '${title.replace(/'/g, "''")}', '${localUri.replace(/'/g, "''")}');
+      INSERT INTO tracks (artist_id, title, local_file_path, source, cover_url)
+      VALUES (${artistRow?.id ?? "NULL"}, '${title.replace(/'/g, "''")}', '${localUri.replace(/'/g, "''")}', 'lastfm', ${safeCoverUrl});
     `);
   }
 }
@@ -228,7 +282,28 @@ export async function getLinkedUri(
     LEFT JOIN artists a ON t.artist_id = a.id
     WHERE t.title = '${title.replace(/'/g, "''")}' 
     AND (a.name = '${artist.replace(/'/g, "''")}' OR t.artist_id IS NULL)
+    AND t.source = 'lastfm'
     LIMIT 1;
   `);
   return row?.local_file_path ?? null;
+}
+
+export async function cleanMissingFiles(): Promise<void> {
+  const db = await getDatabase();
+
+  const tracks = await db.getAllAsync<{ id: number; local_file_path: string }>(
+    `SELECT id, local_file_path FROM tracks WHERE local_file_path IS NOT NULL;`,
+  );
+
+  const { getInfoAsync } = await import("expo-file-system/legacy");
+
+  for (const track of tracks) {
+    try {
+      const info = await getInfoAsync(track.local_file_path);
+      if (!info.exists) {
+        console.log(`🗑️ Removing missing file: ${track.local_file_path}`);
+        await db.execAsync(`DELETE FROM tracks WHERE id = ${track.id};`);
+      }
+    } catch (e) {}
+  }
 }

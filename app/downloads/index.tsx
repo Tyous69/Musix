@@ -1,14 +1,9 @@
+import { deleteTrack, getAllTracks } from "@/db/schema";
+import { Track, usePlayerStore } from "@/stores/playerStore";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TEAL = "#00BFA5";
@@ -17,69 +12,75 @@ const HEADER_BG = "#0D2B2B";
 const CARD_BG = "#1A1A1A";
 const MUTED = "#9E9E9E";
 
-type SyncFile = {
-  id: string;
-  name: string;
-  size: string;
-  status: "idle" | "downloading" | "done";
+type DBTrack = {
+  id: number;
+  title: string;
+  artist: string;
+  local_file_path: string;
+  duration_ms: number | null;
+  is_liked: number;
 };
 
-const MOCK_FILES: SyncFile[] = [
-  { id: "1", name: "Blue Bird - Ikimono-gakari.mp3", size: "8.2 MB", status: "idle" },
-  { id: "2", name: "Gurenge - LiSA.mp3", size: "7.1 MB", status: "idle" },
-  { id: "3", name: "Silhouette - KANA-BOON.mp3", size: "6.8 MB", status: "idle" },
-  { id: "4", name: "Rain - Sid.mp3", size: "9.4 MB", status: "idle" },
-  { id: "5", name: "Unravel - TK.mp3", size: "7.6 MB", status: "idle" },
-];
+export default function DownloadsScreen() {
+  const [tracks, setTracks] = useState<DBTrack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { setTrack, setQueue } = usePlayerStore();
 
-export default function WifiSyncScreen() {
-  const [ip, setIp] = useState("");
-  const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [files, setFiles] = useState<SyncFile[]>([]);
-  const [error, setError] = useState("");
+  useEffect(() => {
+    getAllTracks()
+      .then(setTracks)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
-  async function connect() {
-    if (!ip.trim()) return;
-    setConnecting(true);
-    setError("");
-    // Simulate connection attempt
-    await new Promise((r) => setTimeout(r, 1500));
-    if (ip.trim() === "192.168.1.0") {
-      setError("Cannot reach server. Check the IP and make sure the PC server is running.");
-      setConnecting(false);
-      return;
-    }
-    setFiles(MOCK_FILES);
-    setConnected(true);
-    setConnecting(false);
-  }
+  const buildTrack = (s: DBTrack): Track => ({
+    id: String(s.id),
+    title: s.title,
+    artist: s.artist,
+    album: "",
+    coverUrl: null,
+    previewUrl: null,
+    localUri: s.local_file_path,
+  });
 
-  function disconnect() {
-    setConnected(false);
-    setFiles([]);
-    setIp("");
-  }
+  const handlePlay = (s: DBTrack, index: number) => {
+    const queue = tracks.map(buildTrack);
+    setQueue(queue);
+    setTrack(queue[index]);
+  };
 
-  function downloadFile(id: string) {
-    setFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, status: "downloading" } : f))
-    );
-    setTimeout(() => {
-      setFiles((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, status: "done" } : f))
-      );
-    }, 2000);
-  }
+  const handlePlayAll = () => {
+    if (tracks.length === 0) return;
+    const queue = tracks.map(buildTrack);
+    setQueue(queue);
+    setTrack(queue[0]);
+  };
 
-  function downloadAll() {
-    const idleIds = files.filter((f) => f.status === "idle").map((f) => f.id);
-    idleIds.forEach((id) => downloadFile(id));
-  }
+  const handleDelete = (item: DBTrack) => {
+    Alert.alert("Supprimer", `Supprimer "${item.title}" ?`, [
+      { text: "Annuler", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await deleteTrack(item.id);
+          setTracks((prev) => prev.filter((t) => t.id !== item.id));
+        },
+      },
+    ]);
+  };
 
-  function renderFile({ item }: { item: SyncFile }) {
+  const formatDuration = (ms: number | null) => {
+    if (!ms) return "";
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  function renderTrack({ item, index }: { item: DBTrack; index: number }) {
     return (
-      <View
+      <TouchableOpacity
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -87,67 +88,49 @@ export default function WifiSyncScreen() {
           paddingVertical: 14,
           borderBottomWidth: 0.5,
           borderBottomColor: "#1A1A1A",
-          gap: 12,
+          gap: 14,
         }}
+        onPress={() => handlePlay(item, index)}
+        activeOpacity={0.7}
       >
         <View
           style={{
-            width: 42,
-            height: 42,
+            width: 48,
+            height: 48,
             borderRadius: 8,
             backgroundColor: CARD_BG,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name="musical-note" size={20} color={TEAL} />
+          <Ionicons name="musical-note" size={22} color={TEAL} />
         </View>
         <View style={{ flex: 1 }}>
           <Text
-            style={{ color: "white", fontSize: 13, fontWeight: "600" }}
+            style={{ color: "white", fontSize: 15, fontWeight: "700" }}
             numberOfLines={1}
           >
-            {item.name}
+            {item.title}
           </Text>
-          <Text style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>
-            {item.size}
+          <Text
+            style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
+            numberOfLines={1}
+          >
+            {item.artist}
           </Text>
         </View>
-
-        {item.status === "idle" && (
-          <TouchableOpacity
-            onPress={() => downloadFile(item.id)}
-            style={{
-              borderWidth: 0.5,
-              borderColor: TEAL,
-              paddingHorizontal: 14,
-              paddingVertical: 7,
-              borderRadius: 20,
-            }}
-          >
-            <Text style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}>
-              Get
-            </Text>
-          </TouchableOpacity>
-        )}
-        {item.status === "downloading" && (
-          <ActivityIndicator size="small" color={TEAL} />
-        )}
-        {item.status === "done" && (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <Ionicons name="checkmark-circle" size={20} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}>
-              Saved
-            </Text>
-          </View>
-        )}
-      </View>
+        {item.duration_ms ? (
+          <Text style={{ color: MUTED, fontSize: 12 }}>
+            {formatDuration(item.duration_ms)}
+          </Text>
+        ) : null}
+        <TouchableOpacity
+          onPress={() => handleDelete(item)}
+          style={{ padding: 6 }}
+        >
+          <Ionicons name="trash-outline" size={18} color="#E05C5C" />
+        </TouchableOpacity>
+      </TouchableOpacity>
     );
   }
 
@@ -168,181 +151,118 @@ export default function WifiSyncScreen() {
             <TouchableOpacity onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color={TEAL} />
             </TouchableOpacity>
-            <Ionicons name="wifi" size={26} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}>
-              Wi-Fi Sync
+            <Ionicons name="download" size={26} color={TEAL} />
+            <Text
+              style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}
+            >
+              Downloads
             </Text>
-            {connected && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: "#0A3A2A",
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 20,
-                }}
-              >
-                <View
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: 4,
-                    backgroundColor: TEAL,
-                  }}
-                />
-                <Text style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}>
-                  Connected
-                </Text>
-              </View>
-            )}
+            <Text style={{ color: MUTED, fontSize: 13 }}>
+              {tracks.length} fichiers
+            </Text>
           </View>
         </SafeAreaView>
       </View>
 
-      {!connected ? (
-        <View style={{ padding: 24 }}>
-          {/* Instructions */}
-          <View
+      {/* Play all bar */}
+      {tracks.length > 0 && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            gap: 12,
+            borderBottomWidth: 0.5,
+            borderBottomColor: "#1A1A1A",
+          }}
+        >
+          <TouchableOpacity
+            onPress={handlePlayAll}
             style={{
-              backgroundColor: "#0D2B2B",
-              borderRadius: 14,
-              padding: 16,
-              marginBottom: 24,
-              gap: 10,
-            }}
-          >
-            <Text style={{ color: TEAL, fontSize: 14, fontWeight: "700", marginBottom: 4 }}>
-              How to connect
-            </Text>
-            {[
-              "1. Launch the PC server (node server.js)",
-              "2. Make sure your phone & PC are on the same Wi-Fi",
-              "3. Enter the IP shown in the PC terminal",
-            ].map((t) => (
-              <Text key={t} style={{ color: MUTED, fontSize: 13, lineHeight: 20 }}>
-                {t}
-              </Text>
-            ))}
-          </View>
-
-          <Text style={{ color: MUTED, fontSize: 13, marginBottom: 8 }}>
-            PC Server IP address
-          </Text>
-          <View
-            style={{
-              backgroundColor: CARD_BG,
-              borderRadius: 12,
               flexDirection: "row",
               alignItems: "center",
-              paddingHorizontal: 16,
-              paddingVertical: 14,
+              gap: 8,
+              backgroundColor: TEAL,
+              paddingHorizontal: 18,
+              paddingVertical: 9,
+              borderRadius: 24,
+            }}
+          >
+            <Ionicons name="play" size={16} color="black" />
+            <Text style={{ color: "black", fontWeight: "700", fontSize: 13 }}>
+              Play all
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push("/wifi-sync")}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
               borderWidth: 0.5,
               borderColor: "#2A2A2A",
-              marginBottom: 12,
+              paddingHorizontal: 18,
+              paddingVertical: 9,
+              borderRadius: 24,
             }}
           >
-            <Ionicons name="desktop-outline" size={18} color={MUTED} style={{ marginRight: 10 }} />
-            <TextInput
-              style={{ flex: 1, color: "white", fontSize: 16, fontFamily: "monospace" }}
-              placeholder="192.168.1.XX"
-              placeholderTextColor="#444"
-              value={ip}
-              onChangeText={setIp}
-              keyboardType="numeric"
-              autoCorrect={false}
-            />
-          </View>
-
-          {error !== "" && (
-            <View
-              style={{
-                backgroundColor: "#2A0A0A",
-                borderRadius: 10,
-                padding: 12,
-                marginBottom: 16,
-                flexDirection: "row",
-                gap: 8,
-                alignItems: "center",
-              }}
-            >
-              <Ionicons name="alert-circle" size={16} color="#E05C5C" />
-              <Text style={{ color: "#E05C5C", fontSize: 13, flex: 1 }}>
-                {error}
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={connect}
-            disabled={connecting || !ip.trim()}
-            style={{
-              backgroundColor: ip.trim() ? TEAL : "#1A3A35",
-              paddingVertical: 15,
-              borderRadius: 14,
-              alignItems: "center",
-              flexDirection: "row",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            {connecting ? (
-              <ActivityIndicator size="small" color="black" />
-            ) : (
-              <Ionicons name="wifi" size={18} color={ip.trim() ? "black" : MUTED} />
-            )}
-            <Text
-              style={{
-                color: ip.trim() ? "black" : MUTED,
-                fontWeight: "700",
-                fontSize: 15,
-              }}
-            >
-              {connecting ? "Connecting..." : "Connect"}
+            <Ionicons name="wifi" size={16} color={TEAL} />
+            <Text style={{ color: TEAL, fontWeight: "700", fontSize: 13 }}>
+              Wi-Fi Sync
             </Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <>
-          {/* Server info bar */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 20,
-              paddingVertical: 12,
-              borderBottomWidth: 0.5,
-              borderBottomColor: "#1A1A1A",
-              gap: 10,
-            }}
-          >
-            <Ionicons name="desktop-outline" size={16} color={MUTED} />
-            <Text style={{ color: MUTED, fontSize: 13, flex: 1 }}>
-              {ip} — {files.length} files available
-            </Text>
-            <TouchableOpacity onPress={downloadAll}>
-              <Text style={{ color: TEAL, fontSize: 13, fontWeight: "700" }}>
-                Get all
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={disconnect}
-              style={{ marginLeft: 8, padding: 4 }}
-            >
-              <Ionicons name="close-circle" size={18} color="#E05C5C" />
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={files}
-            keyExtractor={(item) => item.id}
-            renderItem={renderFile}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 120 }}
-          />
-        </>
       )}
+
+      <FlatList
+        data={tracks}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderTrack}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", paddingTop: 80 }}>
+            <Ionicons name="download-outline" size={60} color="#333" />
+            <Text style={{ color: "#555", fontSize: 16, marginTop: 16 }}>
+              {loading ? "Loading..." : "Aucun fichier téléchargé"}
+            </Text>
+            {!loading && (
+              <>
+                <Text
+                  style={{
+                    color: "#444",
+                    fontSize: 13,
+                    marginTop: 8,
+                    textAlign: "center",
+                    paddingHorizontal: 40,
+                  }}
+                >
+                  Sync tes MP3 depuis ton PC via Wi-Fi
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push("/wifi-sync")}
+                  style={{
+                    marginTop: 24,
+                    backgroundColor: TEAL,
+                    paddingHorizontal: 24,
+                    paddingVertical: 12,
+                    borderRadius: 24,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="wifi" size={18} color="black" />
+                  <Text style={{ color: "black", fontWeight: "700" }}>
+                    Ouvrir Wi-Fi Sync
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        }
+      />
     </View>
   );
 }

@@ -1,7 +1,11 @@
 import {
+  addTrackToPlaylist,
+  getAllPlaylists,
   getAllTracks,
+  isLastfmTrackLiked,
+  likeLastfmTrack,
   linkLastfmTrack,
-  toggleLikedTrack
+  unlikeLastfmTrack,
 } from "@/db/schema";
 import { usePlayerStore } from "@/stores/playerStore";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,6 +35,13 @@ type LocalFile = {
   artist: string;
   local_file_path: string;
 };
+type Playlist = {
+  id: number;
+  name: string;
+  color: string | null;
+  track_count: number;
+};
+type ModalView = "menu" | "link" | "playlist";
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -50,34 +61,31 @@ export default function PlayerScreen() {
   } = usePlayerStore();
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalView, setModalView] = useState<ModalView>("menu");
   const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [isLiked, setIsLiked] = useState(false);
-  const [trackDbId, setTrackDbId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (modalVisible) {
-      getAllTracks().then(setLocalFiles).catch(console.error);
-    }
-  }, [modalVisible]);
-
-  // Vérifie si la track courante est likée en SQLite
+  // Vérifie le statut liked au changement de track
   useEffect(() => {
     if (!currentTrack) return;
-    // Cherche l'id SQLite de la track via son localUri
-    getAllTracks().then((tracks) => {
-      const found = tracks.find(
-        (t) => t.local_file_path === currentTrack.localUri,
-      );
-      if (found) {
-        setTrackDbId(found.id);
-        setIsLiked(!!found.is_liked);
-      } else {
-        setTrackDbId(null);
-        setIsLiked(false);
-      }
-    });
+    isLastfmTrackLiked(currentTrack.title, currentTrack.artist)
+      .then(setIsLiked)
+      .catch(() => setIsLiked(false));
   }, [currentTrack?.id]);
 
+  // Charge les données quand la modale s'ouvre
+  useEffect(() => {
+    if (!modalVisible) return;
+    getAllTracks().then(setLocalFiles).catch(console.error);
+    getAllPlaylists().then(setPlaylists).catch(console.error);
+  }, [modalVisible]);
+
+  const openModal = () => {
+    setModalView("menu");
+    setModalVisible(true);
+  };
+  const closeModal = () => setModalVisible(false);
   const togglePlay = () => setIsPlaying(!isPlaying);
   const seek = (seconds: number) => seekFn?.(seconds);
 
@@ -87,25 +95,61 @@ export default function PlayerScreen() {
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
+  const handleToggleLike = async () => {
+    if (!currentTrack) return;
+    if (isLiked) {
+      await unlikeLastfmTrack(currentTrack.title, currentTrack.artist);
+      setIsLiked(false);
+    } else {
+      await likeLastfmTrack(
+        currentTrack.title,
+        currentTrack.artist,
+        currentTrack.coverUrl,
+      );
+      setIsLiked(true);
+    }
+  };
+
   const handleLinkFile = async (file: LocalFile) => {
     if (!currentTrack) return;
     await linkLastfmTrack(
       currentTrack.title,
       currentTrack.artist,
       file.local_file_path,
+      currentTrack.coverUrl,
     );
     usePlayerStore.setState((state) => ({
       currentTrack: state.currentTrack
         ? { ...state.currentTrack, localUri: file.local_file_path }
         : null,
     }));
-    setModalVisible(false);
+    closeModal();
   };
 
-  const handleToggleLike = async () => {
-    if (!trackDbId) return;
-    await toggleLikedTrack(trackDbId);
-    setIsLiked((prev) => !prev);
+  const handleAddToPlaylist = async (playlist: Playlist) => {
+    if (!currentTrack) return;
+    // Trouve ou crée la track en SQLite
+    const tracks = await getAllTracks();
+    const found = tracks.find(
+      (t) => t.title === currentTrack.title && t.artist === currentTrack.artist,
+    );
+    if (found) {
+      await addTrackToPlaylist(playlist.id, found.id);
+    } else {
+      // Like d'abord pour créer la track
+      await likeLastfmTrack(
+        currentTrack.title,
+        currentTrack.artist,
+        currentTrack.coverUrl,
+      );
+      const updated = await getAllTracks();
+      const created = updated.find(
+        (t) =>
+          t.title === currentTrack.title && t.artist === currentTrack.artist,
+      );
+      if (created) await addTrackToPlaylist(playlist.id, created.id);
+    }
+    closeModal();
   };
 
   if (!currentTrack) {
@@ -159,15 +203,12 @@ export default function PlayerScreen() {
               <Ionicons name="chevron-down" size={14} color={TEAL} />
             </View>
           </View>
-          <TouchableOpacity
-            style={{ paddingTop: 4 }}
-            onPress={() => setModalVisible(true)}
-          >
+          <TouchableOpacity style={{ paddingTop: 4 }} onPress={openModal}>
             <Ionicons name="ellipsis-vertical" size={22} color="white" />
           </TouchableOpacity>
         </View>
 
-        {/* Cover Art */}
+        {/* Cover */}
         <View style={{ paddingHorizontal: 16, marginBottom: 28 }}>
           {currentTrack.coverUrl ? (
             <Image
@@ -260,7 +301,7 @@ export default function PlayerScreen() {
           </View>
         </View>
 
-        {/* Progress bar */}
+        {/* Slider */}
         <View style={{ paddingHorizontal: 16, marginBottom: 4 }}>
           <Slider
             minimumValue={0}
@@ -353,8 +394,6 @@ export default function PlayerScreen() {
               backgroundColor: repeatMode !== "none" ? TEAL : "#1A1A1A",
               borderRadius: 20,
               padding: 8,
-              alignItems: "center",
-              justifyContent: "center",
             }}
           >
             <Ionicons
@@ -366,12 +405,12 @@ export default function PlayerScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Modale liaison MP3 */}
+      {/* Modale */}
       <Modal
         visible={modalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={closeModal}
       >
         <View
           style={{
@@ -390,6 +429,7 @@ export default function PlayerScreen() {
               maxHeight: "70%",
             }}
           >
+            {/* Header modale */}
             <View
               style={{
                 flexDirection: "row",
@@ -403,86 +443,259 @@ export default function PlayerScreen() {
                 <Text
                   style={{ color: "white", fontSize: 16, fontWeight: "800" }}
                 >
-                  Link a local file
+                  {modalView === "menu"
+                    ? currentTrack.title
+                    : modalView === "link"
+                      ? "Link a local file"
+                      : "Add to playlist"}
                 </Text>
                 <Text
                   style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
                   numberOfLines={1}
                 >
-                  {currentTrack.title}
+                  {currentTrack.artist}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={MUTED} />
+              <TouchableOpacity
+                onPress={
+                  modalView === "menu" ? closeModal : () => setModalView("menu")
+                }
+              >
+                <Ionicons
+                  name={modalView === "menu" ? "close" : "arrow-back"}
+                  size={24}
+                  color={MUTED}
+                />
               </TouchableOpacity>
             </View>
 
-            {localFiles.length === 0 ? (
-              <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                <Ionicons name="folder-open-outline" size={48} color="#333" />
-                <Text
+            {/* Menu principal */}
+            {modalView === "menu" && (
+              <View>
+                <TouchableOpacity
+                  onPress={() => setModalView("playlist")}
                   style={{
-                    color: "#555",
-                    fontSize: 14,
-                    marginTop: 12,
-                    textAlign: "center",
-                    paddingHorizontal: 32,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 20,
+                    paddingVertical: 16,
+                    borderBottomWidth: 0.5,
+                    borderBottomColor: "#1A1A1A",
+                    gap: 16,
                   }}
                 >
-                  No local MP3.{"\n"}Sync via Wi-Fi first.
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={localFiles}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    onPress={() => handleLinkFile(item)}
+                  <View
                     style={{
-                      flexDirection: "row",
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: "#0D2B2B",
                       alignItems: "center",
-                      paddingHorizontal: 20,
-                      paddingVertical: 14,
-                      borderBottomWidth: 0.5,
-                      borderBottomColor: "#1A1A1A",
-                      gap: 14,
+                      justifyContent: "center",
                     }}
                   >
-                    <View
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={22}
+                      color={TEAL}
+                    />
+                  </View>
+                  <Text
+                    style={{ color: "white", fontSize: 15, fontWeight: "600" }}
+                  >
+                    Add to playlist
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={MUTED}
+                    style={{ marginLeft: "auto" }}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setModalView("link")}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 20,
+                    paddingVertical: 16,
+                    gap: 16,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: "#0D2B2B",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="link-outline" size={22} color={TEAL} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
                       style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 8,
-                        backgroundColor: "#1A1A1A",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        color: "white",
+                        fontSize: 15,
+                        fontWeight: "600",
                       }}
                     >
-                      <Ionicons name="musical-note" size={20} color={TEAL} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: "white",
-                          fontSize: 14,
-                          fontWeight: "600",
-                        }}
-                        numberOfLines={1}
-                      >
-                        {item.title}
+                      Link local MP3
+                    </Text>
+                    {currentTrack.localUri && (
+                      <Text style={{ color: TEAL, fontSize: 12, marginTop: 2 }}>
+                        ✓ Already linked
                       </Text>
-                      <Text
-                        style={{ color: MUTED, fontSize: 12, marginTop: 2 }}
-                      >
-                        {item.artist}
-                      </Text>
-                    </View>
-                    <Ionicons name="link" size={18} color={TEAL} />
-                  </TouchableOpacity>
-                )}
-              />
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={MUTED} />
+                </TouchableOpacity>
+              </View>
             )}
+
+            {/* Vue Link MP3 */}
+            {modalView === "link" &&
+              (localFiles.length === 0 ? (
+                <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                  <Ionicons name="folder-open-outline" size={48} color="#333" />
+                  <Text
+                    style={{
+                      color: "#555",
+                      fontSize: 14,
+                      marginTop: 12,
+                      textAlign: "center",
+                      paddingHorizontal: 32,
+                    }}
+                  >
+                    No local MP3.{"\n"}Sync via Wi-Fi first.
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={localFiles}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => handleLinkFile(item)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 20,
+                        paddingVertical: 14,
+                        borderBottomWidth: 0.5,
+                        borderBottomColor: "#1A1A1A",
+                        gap: 14,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 8,
+                          backgroundColor: "#1A1A1A",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons name="musical-note" size={20} color={TEAL} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: "white",
+                            fontSize: 14,
+                            fontWeight: "600",
+                          }}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                        <Text
+                          style={{ color: MUTED, fontSize: 12, marginTop: 2 }}
+                        >
+                          {item.artist}
+                        </Text>
+                      </View>
+                      <Ionicons name="link" size={18} color={TEAL} />
+                    </TouchableOpacity>
+                  )}
+                />
+              ))}
+
+            {/* Vue Add to playlist */}
+            {modalView === "playlist" &&
+              (playlists.length === 0 ? (
+                <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                  <Ionicons name="list-outline" size={48} color="#333" />
+                  <Text
+                    style={{
+                      color: "#555",
+                      fontSize: 14,
+                      marginTop: 12,
+                      textAlign: "center",
+                    }}
+                  >
+                    No playlists yet.{"\n"}Create one in Library.
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={playlists}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => handleAddToPlaylist(item)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 20,
+                        paddingVertical: 14,
+                        borderBottomWidth: 0.5,
+                        borderBottomColor: "#1A1A1A",
+                        gap: 14,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 8,
+                          backgroundColor: item.color ?? "#2BA8C8",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons
+                          name="musical-notes"
+                          size={20}
+                          color="white"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: "white",
+                            fontSize: 14,
+                            fontWeight: "600",
+                          }}
+                          numberOfLines={1}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text
+                          style={{ color: MUTED, fontSize: 12, marginTop: 2 }}
+                        >
+                          {item.track_count} songs
+                        </Text>
+                      </View>
+                      <Ionicons name="add" size={22} color={TEAL} />
+                    </TouchableOpacity>
+                  )}
+                />
+              ))}
           </View>
         </View>
       </Modal>

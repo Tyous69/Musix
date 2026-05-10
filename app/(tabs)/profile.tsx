@@ -1,3 +1,4 @@
+import { getStats } from "@/db/schema";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
@@ -12,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getStats } from "@/db/schema";
 
 const TEAL = "#00BFA5";
 const BG = "#0A0A0A";
@@ -31,15 +31,14 @@ export default function ProfileScreen() {
     likedTracksCount: 0,
     totalListeningHours: 0,
   });
-  const [username, setUsername] = useState("chandrama");
+  const [username, setUsername] = useState("musix");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Recharge à chaque fois qu'on revient sur cet écran (après edit-profile)
   useFocusEffect(
     useCallback(() => {
       loadAll();
-    }, [])
+    }, []),
   );
 
   async function loadAll() {
@@ -51,8 +50,7 @@ export default function ProfileScreen() {
       ]);
       setStats(data);
       if (name) setUsername(name);
-      if (avatar) setAvatarUri(avatar);
-      else setAvatarUri(null);
+      setAvatarUri(avatar ?? null);
     } catch (e) {
       console.error("Failed to load profile:", e);
     } finally {
@@ -82,7 +80,8 @@ export default function ProfileScreen() {
     {
       icon: "heart-outline" as const,
       label: "Liked Songs",
-      badge: stats.likedTracksCount > 0 ? stats.likedTracksCount.toString() : null,
+      badge:
+        stats.likedTracksCount > 0 ? stats.likedTracksCount.toString() : null,
       route: "/liked-songs",
     },
     {
@@ -109,9 +108,11 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      <LinearGradient colors={["#0D2B2B", "#0A0A0A"]} style={{ paddingBottom: 28 }}>
+      <LinearGradient
+        colors={["#0D2B2B", "#0A0A0A"]}
+        style={{ paddingBottom: 28 }}
+      >
         <SafeAreaView>
-          {/* Header */}
           <View
             style={{
               flexDirection: "row",
@@ -123,7 +124,9 @@ export default function ProfileScreen() {
             }}
           >
             <Ionicons name="person" size={28} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 28, fontWeight: "800", flex: 1 }}>
+            <Text
+              style={{ color: TEAL, fontSize: 28, fontWeight: "800", flex: 1 }}
+            >
               Profile
             </Text>
             <TouchableOpacity
@@ -139,11 +142,12 @@ export default function ProfileScreen() {
               }}
             >
               <Ionicons name="pencil-outline" size={14} color={TEAL} />
-              <Text style={{ color: TEAL, fontSize: 13, fontWeight: "700" }}>Edit</Text>
+              <Text style={{ color: TEAL, fontSize: 13, fontWeight: "700" }}>
+                Edit
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Avatar */}
           <View style={{ alignItems: "center", paddingBottom: 4 }}>
             <TouchableOpacity
               onPress={() => router.push("/settings/edit-profile" as any)}
@@ -175,13 +179,22 @@ export default function ProfileScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  <Text style={{ fontSize: 32, color: TEAL, fontWeight: "800" }}>
+                  <Text
+                    style={{ fontSize: 32, color: TEAL, fontWeight: "800" }}
+                  >
                     {initial}
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
-            <Text style={{ color: "white", fontSize: 20, fontWeight: "800", marginBottom: 4 }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 20,
+                fontWeight: "800",
+                marginBottom: 4,
+              }}
+            >
               {username}
             </Text>
             <Text style={{ color: MUTED, fontSize: 13 }}>
@@ -222,7 +235,14 @@ export default function ProfileScreen() {
                   borderRightColor: "#2A2A2A",
                 }}
               >
-                <Text style={{ color: TEAL, fontSize: 22, fontWeight: "800", marginBottom: 2 }}>
+                <Text
+                  style={{
+                    color: TEAL,
+                    fontSize: 22,
+                    fontWeight: "800",
+                    marginBottom: 2,
+                  }}
+                >
                   {s.value}
                 </Text>
                 <Text style={{ color: MUTED, fontSize: 12 }}>{s.label}</Text>
@@ -268,7 +288,14 @@ export default function ProfileScreen() {
               >
                 <Ionicons name={item.icon} size={18} color={TEAL} />
               </View>
-              <Text style={{ flex: 1, color: "white", fontSize: 15, fontWeight: "600" }}>
+              <Text
+                style={{
+                  flex: 1,
+                  color: "white",
+                  fontSize: 15,
+                  fontWeight: "600",
+                }}
+              >
                 {item.label}
               </Text>
               {item.badge && (
@@ -280,7 +307,9 @@ export default function ProfileScreen() {
                     borderRadius: 20,
                   }}
                 >
-                  <Text style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}>
+                  <Text
+                    style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}
+                  >
                     {item.badge}
                   </Text>
                 </View>
@@ -289,28 +318,6 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Sign out */}
-        <TouchableOpacity
-          style={{
-            marginHorizontal: 20,
-            paddingVertical: 14,
-            borderRadius: 12,
-            borderWidth: 0.5,
-            borderColor: "#3A1A1A",
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 8,
-            backgroundColor: CARD_BG,
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="log-out-outline" size={18} color="#E05C5C" />
-          <Text style={{ color: "#E05C5C", fontSize: 14, fontWeight: "700" }}>
-            Sign out
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );

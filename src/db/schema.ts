@@ -90,7 +90,9 @@ export async function initDatabase(): Promise<void> {
     await db.execAsync(`ALTER TABLE playlists ADD COLUMN color TEXT;`);
   } catch (e) {}
   try {
-    await db.execAsync(`ALTER TABLE tracks ADD COLUMN listening_ms INTEGER DEFAULT 0;`);
+    await db.execAsync(
+      `ALTER TABLE tracks ADD COLUMN listening_ms INTEGER DEFAULT 0;`,
+    );
   } catch (e) {}
 }
 
@@ -411,4 +413,165 @@ export async function getRecentTracks(): Promise<
     ORDER BY played_at DESC
     LIMIT 6;
   `);
+}
+
+// ─── Liked Last.fm tracks (sans fichier local) ─────────────────────────────
+export async function likeLastfmTrack(
+  title: string,
+  artist: string,
+  coverUrl: string | null,
+): Promise<void> {
+  const db = await getDatabase();
+
+  await db.execAsync(
+    `INSERT OR IGNORE INTO artists (name) VALUES ('${artist.replace(/'/g, "''")}');`,
+  );
+  const artistRow = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM artists WHERE name = '${artist.replace(/'/g, "''")}';`,
+  );
+
+  const existing = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM tracks WHERE title = '${title.replace(/'/g, "''")}' AND artist_id = ${artistRow?.id ?? "NULL"};`,
+  );
+
+  if (existing) {
+    await db.execAsync(
+      `UPDATE tracks SET is_liked = 1, cover_url = ${coverUrl ? `'${coverUrl.replace(/'/g, "''")}'` : "NULL"} WHERE id = ${existing.id};`,
+    );
+  } else {
+    await db.execAsync(`
+      INSERT INTO tracks (artist_id, title, source, is_liked, cover_url)
+      VALUES (${artistRow?.id ?? "NULL"}, '${title.replace(/'/g, "''")}', 'lastfm', 1, ${coverUrl ? `'${coverUrl.replace(/'/g, "''")}'` : "NULL"});
+    `);
+  }
+}
+
+export async function unlikeLastfmTrack(
+  title: string,
+  artist: string,
+): Promise<void> {
+  const db = await getDatabase();
+  const artistRow = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM artists WHERE name = '${artist.replace(/'/g, "''")}';`,
+  );
+  if (!artistRow) return;
+  // Si la track a un fichier local, juste toggle le like
+  // Sinon la supprime carrément
+  const track = await db.getFirstAsync<{
+    id: number;
+    local_file_path: string | null;
+  }>(
+    `SELECT id, local_file_path FROM tracks WHERE title = '${title.replace(/'/g, "''")}' AND artist_id = ${artistRow.id};`,
+  );
+  if (!track) return;
+  if (track.local_file_path) {
+    await db.execAsync(
+      `UPDATE tracks SET is_liked = 0 WHERE id = ${track.id};`,
+    );
+  } else {
+    await db.execAsync(`DELETE FROM tracks WHERE id = ${track.id};`);
+  }
+}
+
+export async function isLastfmTrackLiked(
+  title: string,
+  artist: string,
+): Promise<boolean> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ is_liked: number }>(`
+    SELECT t.is_liked FROM tracks t
+    LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE t.title = '${title.replace(/'/g, "''")}' 
+    AND a.name = '${artist.replace(/'/g, "''")}';
+  `);
+  return (row?.is_liked ?? 0) === 1;
+}
+
+// ─── Playlists — ajouter/retirer des tracks ────────────────────────────────
+export async function createPlaylist(
+  name: string,
+  color: string,
+): Promise<number> {
+  const db = await getDatabase();
+  await db.execAsync(`
+    INSERT INTO playlists (name, color) VALUES ('${name.replace(/'/g, "''")}', '${color}');
+  `);
+  const row = await db.getFirstAsync<{ id: number }>(
+    `SELECT last_insert_rowid() as id;`,
+  );
+  return row?.id ?? 0;
+}
+
+export async function addTrackToPlaylist(
+  playlistId: number,
+  trackId: number,
+): Promise<void> {
+  const db = await getDatabase();
+  const pos = await db.getFirstAsync<{ max: number }>(
+    `SELECT COALESCE(MAX(position), 0) as max FROM playlist_tracks WHERE playlist_id = ${playlistId};`,
+  );
+  await db.execAsync(`
+    INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position)
+    VALUES (${playlistId}, ${trackId}, ${(pos?.max ?? 0) + 1});
+  `);
+}
+
+export async function getPlaylistTracks(playlistId: number): Promise<
+  {
+    id: number;
+    title: string;
+    artist: string;
+    local_file_path: string;
+    duration_ms: number | null;
+    cover_url: string | null;
+    is_liked: number;
+  }[]
+> {
+  const db = await getDatabase();
+  return await db.getAllAsync(`
+    SELECT t.id, t.title, t.local_file_path, t.duration_ms, t.cover_url, t.is_liked,
+           COALESCE(a.name, 'Unknown Artist') as artist
+    FROM playlist_tracks pt
+    JOIN tracks t ON pt.track_id = t.id
+    LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE pt.playlist_id = ${playlistId}
+    ORDER BY pt.position ASC;
+  `);
+}
+
+export async function deletePlaylist(id: number): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(`DELETE FROM playlists WHERE id = ${id};`);
+}
+
+// ─── Wipe complet ──────────────────────────────────────────────────────────
+export async function wipeAllData(): Promise<void> {
+  const db = await getDatabase();
+
+  // Supprime les fichiers physiques
+  const tracks = await db.getAllAsync<{ local_file_path: string }>(
+    `SELECT local_file_path FROM tracks WHERE local_file_path IS NOT NULL;`,
+  );
+  const { deleteAsync } = await import("expo-file-system/legacy");
+  for (const t of tracks) {
+    try {
+      await deleteAsync(t.local_file_path, { idempotent: true });
+    } catch (e) {}
+  }
+
+  // Vide toutes les tables
+  await db.execAsync(`
+    DELETE FROM playlist_tracks;
+    DELETE FROM playlists;
+    DELETE FROM tracks;
+    DELETE FROM artists;
+    DELETE FROM albums;
+    DELETE FROM recent_plays;
+  `);
+
+  // Wipe AsyncStorage
+  const AsyncStorage = (
+    await import("@react-native-async-storage/async-storage")
+  ).default;
+  await AsyncStorage.clear();
 }

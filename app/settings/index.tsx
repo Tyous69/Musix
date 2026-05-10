@@ -1,10 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  Modal,
   ScrollView,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -21,6 +26,16 @@ export default function SettingsScreen() {
   const [highQuality, setHighQuality] = useState(false);
   const [autoPlay, setAutoPlay] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  const [showWipeModal, setShowWipeModal] = useState(false);
+  const [wipeInput, setWipeInput] = useState("");
+  const [username, setUsername] = useState("");
+  const [wiping, setWiping] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("musix:username").then((v) => {
+      if (v) setUsername(v);
+    });
+  }, []);
 
   type IoniconsName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -119,12 +134,28 @@ export default function SettingsScreen() {
             </Text>
           )}
         </View>
-        {rightElement ?? (
-          onPress && <Ionicons name="chevron-forward" size={16} color={MUTED} />
-        )}
+        {rightElement ??
+          (onPress && (
+            <Ionicons name="chevron-forward" size={16} color={MUTED} />
+          ))}
       </TouchableOpacity>
     );
   }
+
+  const handleWipe = async () => {
+    setWiping(true);
+    try {
+      const { wipeAllData } = await import("@/db/schema");
+      await wipeAllData();
+      setShowWipeModal(false);
+      setWipeInput("");
+      router.replace("/(tabs)" as any);
+    } catch (e) {
+      Alert.alert("Error", "Failed to delete data. Please try again.");
+    } finally {
+      setWiping(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -155,7 +186,6 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
       >
-        {/* ── Account ── */}
         <Section title="Account">
           <SettingRow
             icon="person-circle-outline"
@@ -166,7 +196,6 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── Playback ── */}
         <Section title="Playback">
           <SettingRow
             icon="musical-notes-outline"
@@ -197,7 +226,6 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── Downloads & Sync ── */}
         <Section title="Downloads & Sync">
           <SettingRow
             icon="wifi-outline"
@@ -225,7 +253,6 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── Notifications ── */}
         <Section title="Notifications">
           <SettingRow
             icon="notifications-outline"
@@ -242,7 +269,6 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── About ── */}
         <Section title="About">
           <SettingRow
             icon="information-circle-outline"
@@ -257,24 +283,140 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* ── Sign out ── */}
-        <View
-          style={{
-            marginHorizontal: 20,
-            backgroundColor: CARD_BG,
-            borderRadius: 14,
-            overflow: "hidden",
-            marginBottom: 8,
-          }}
-        >
+        <Section title="Danger Zone">
           <SettingRow
-            icon="log-out-outline"
-            label="Sign out"
+            icon="trash-outline"
+            label="Delete all data"
+            sublabel="Wipe everything — irreversible"
             danger
             last
+            onPress={() => setShowWipeModal(true)}
           />
-        </View>
+        </Section>
       </ScrollView>
+
+      {/* Modal wipe */}
+      <Modal
+        visible={showWipeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowWipeModal(false);
+          setWipeInput("");
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.85)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#141414",
+              borderRadius: 20,
+              padding: 24,
+              width: "100%",
+            }}
+          >
+            <Ionicons
+              name="warning-outline"
+              size={40}
+              color="#E05C5C"
+              style={{ alignSelf: "center", marginBottom: 12 }}
+            />
+            <Text
+              style={{
+                color: "white",
+                fontSize: 18,
+                fontWeight: "800",
+                textAlign: "center",
+                marginBottom: 8,
+              }}
+            >
+              Delete all data?
+            </Text>
+            <Text
+              style={{
+                color: MUTED,
+                fontSize: 13,
+                textAlign: "center",
+                marginBottom: 20,
+                lineHeight: 20,
+              }}
+            >
+              This will permanently delete all your downloads, playlists, likes
+              and profile. This cannot be undone.{"\n\n"}
+              Type your username{" "}
+              <Text style={{ color: "#E05C5C", fontWeight: "700" }}>
+                "{username}"
+              </Text>{" "}
+              to confirm.
+            </Text>
+            <TextInput
+              value={wipeInput}
+              onChangeText={setWipeInput}
+              placeholder={username || "your username"}
+              placeholderTextColor="#444"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{
+                backgroundColor: "#1A1A1A",
+                borderRadius: 10,
+                padding: 14,
+                color: "white",
+                fontSize: 15,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor:
+                  wipeInput === username && username.length > 0
+                    ? "#E05C5C"
+                    : "#2A2A2A",
+              }}
+            />
+            <TouchableOpacity
+              disabled={
+                wipeInput !== username || wiping || username.length === 0
+              }
+              onPress={handleWipe}
+              style={{
+                backgroundColor:
+                  wipeInput === username && username.length > 0
+                    ? "#E05C5C"
+                    : "#2A1A1A",
+                borderRadius: 12,
+                padding: 14,
+                alignItems: "center",
+                marginBottom: 8,
+                opacity:
+                  wipeInput !== username || username.length === 0 ? 0.5 : 1,
+              }}
+            >
+              {wiping ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text
+                  style={{ color: "white", fontWeight: "800", fontSize: 15 }}
+                >
+                  Delete everything
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowWipeModal(false);
+                setWipeInput("");
+              }}
+              style={{ padding: 12, alignItems: "center" }}
+            >
+              <Text style={{ color: MUTED, fontSize: 14 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 
 // Change ce chemin vers ton dossier MP3
-const MP3_DIR = "C:\\Users\\hpvic\\Bureau\\mp3";
+const MP3_DIR = "C:\\Users\\dulou\\Desktop\\song for songz\\song";
 
 // GET /files — liste tous les MP3
 app.get("/files", (req, res) => {
@@ -74,9 +74,9 @@ app.listen(PORT, "0.0.0.0", () => {
         net.family === "IPv4" &&
         !net.internal &&
         !net.address.startsWith("169.254") && // exclut APIPA
-        !net.address.startsWith("172.")      && // exclut WSL / Hyper-V / Docker
-        net.address !== "192.168.56.1"       && // exclut VirtualBox
-        net.address !== "192.168.142.1"         // exclut VMware
+        !net.address.startsWith("172.") && // exclut WSL / Hyper-V / Docker
+        net.address !== "192.168.56.1" && // exclut VirtualBox
+        net.address !== "192.168.142.1" // exclut VMware
       ) {
         ip = net.address;
       }

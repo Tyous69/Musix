@@ -1,69 +1,117 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getStats } from "@/db/schema";
 
 const TEAL = "#00BFA5";
 const BG = "#0A0A0A";
 const CARD_BG = "#1A1A1A";
 const MUTED = "#9E9E9E";
 
-const stats = [
-  { label: "Songs", value: "248" },
-  { label: "Playlists", value: "12" },
-  { label: "Hours", value: "340" },
-];
-
-const menuItems = [
-  {
-    icon: "musical-notes-outline" as const,
-    label: "All Songs",
-    badge: "248",
-    route: "/all-songs",
-  },
-  {
-    icon: "list-outline" as const,
-    label: "Playlists",
-    badge: "12",
-    route: "/playlists",
-  },
-  {
-    icon: "heart-outline" as const,
-    label: "Liked Songs",
-    badge: "34",
-    route: "/liked-songs",
-  },
-  {
-    icon: "wifi-outline" as const,
-    label: "Wi-Fi Sync",
-    badge: null,
-    route: "/wifi-sync",
-  },
-  {
-    icon: "download-outline" as const,
-    label: "Downloads",
-    badge: null,
-    route: "/downloads",
-  },
-  {
-    icon: "settings-outline" as const,
-    label: "Settings",
-    badge: null,
-    route: "/settings",
-  },
-];
+const STORAGE_KEYS = {
+  USERNAME: "musix:username",
+  AVATAR_URI: "musix:avatar_uri",
+};
 
 export default function ProfileScreen() {
+  const [stats, setStats] = useState({
+    totalTracks: 0,
+    totalPlaylists: 0,
+    likedTracksCount: 0,
+    totalListeningHours: 0,
+  });
+  const [username, setUsername] = useState("chandrama");
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Recharge à chaque fois qu'on revient sur cet écran (après edit-profile)
+  useFocusEffect(
+    useCallback(() => {
+      loadAll();
+    }, [])
+  );
+
+  async function loadAll() {
+    try {
+      const [data, name, avatar] = await Promise.all([
+        getStats(),
+        AsyncStorage.getItem(STORAGE_KEYS.USERNAME),
+        AsyncStorage.getItem(STORAGE_KEYS.AVATAR_URI),
+      ]);
+      setStats(data);
+      if (name) setUsername(name);
+      if (avatar) setAvatarUri(avatar);
+      else setAvatarUri(null);
+    } catch (e) {
+      console.error("Failed to load profile:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const statCards = [
+    { label: "Songs", value: stats.totalTracks.toString() },
+    { label: "Playlists", value: stats.totalPlaylists.toString() },
+    { label: "Hours", value: stats.totalListeningHours.toString() },
+  ];
+
+  const menuItems = [
+    {
+      icon: "musical-notes-outline" as const,
+      label: "All Songs",
+      badge: stats.totalTracks > 0 ? stats.totalTracks.toString() : null,
+      route: "/all-songs",
+    },
+    {
+      icon: "list-outline" as const,
+      label: "Playlists",
+      badge: stats.totalPlaylists > 0 ? stats.totalPlaylists.toString() : null,
+      route: "/playlists",
+    },
+    {
+      icon: "heart-outline" as const,
+      label: "Liked Songs",
+      badge: stats.likedTracksCount > 0 ? stats.likedTracksCount.toString() : null,
+      route: "/liked-songs",
+    },
+    {
+      icon: "wifi-outline" as const,
+      label: "Wi-Fi Sync",
+      badge: null,
+      route: "/wifi-sync",
+    },
+    {
+      icon: "download-outline" as const,
+      label: "Downloads",
+      badge: null,
+      route: "/downloads",
+    },
+    {
+      icon: "settings-outline" as const,
+      label: "Settings",
+      badge: null,
+      route: "/settings",
+    },
+  ];
+
+  const initial = username ? username[0].toUpperCase() : "?";
+
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      {/* Même LinearGradient que search.tsx */}
-      <LinearGradient
-        colors={["#0D2B2B", "#0A0A0A"]}
-        style={{ paddingBottom: 28 }}
-      >
+      <LinearGradient colors={["#0D2B2B", "#0A0A0A"]} style={{ paddingBottom: 28 }}>
         <SafeAreaView>
-          {/* Titre */}
+          {/* Header */}
           <View
             style={{
               flexDirection: "row",
@@ -75,42 +123,69 @@ export default function ProfileScreen() {
             }}
           >
             <Ionicons name="person" size={28} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 28, fontWeight: "800" }}>
+            <Text style={{ color: TEAL, fontSize: 28, fontWeight: "800", flex: 1 }}>
               Profile
             </Text>
+            <TouchableOpacity
+              onPress={() => router.push("/settings/edit-profile" as any)}
+              style={{
+                backgroundColor: "#1A3333",
+                borderRadius: 20,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <Ionicons name="pencil-outline" size={14} color={TEAL} />
+              <Text style={{ color: TEAL, fontSize: 13, fontWeight: "700" }}>Edit</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Avatar centré dans le gradient */}
+          {/* Avatar */}
           <View style={{ alignItems: "center", paddingBottom: 4 }}>
-            <View
-              style={{
-                width: 86,
-                height: 86,
-                borderRadius: 43,
-                borderWidth: 2.5,
-                borderColor: TEAL,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#1A3333",
-                marginBottom: 12,
-              }}
+            <TouchableOpacity
+              onPress={() => router.push("/settings/edit-profile" as any)}
+              activeOpacity={0.8}
             >
-              <Text style={{ fontSize: 32, color: TEAL, fontWeight: "800" }}>
-                C
-              </Text>
-            </View>
-            <Text
-              style={{
-                color: "white",
-                fontSize: 20,
-                fontWeight: "800",
-                marginBottom: 4,
-              }}
-            >
-              chandrama
+              {avatarUri ? (
+                <Image
+                  source={{ uri: avatarUri }}
+                  style={{
+                    width: 86,
+                    height: 86,
+                    borderRadius: 43,
+                    borderWidth: 2.5,
+                    borderColor: TEAL,
+                    marginBottom: 12,
+                  }}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 86,
+                    height: 86,
+                    borderRadius: 43,
+                    borderWidth: 2.5,
+                    borderColor: TEAL,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#1A3333",
+                    marginBottom: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 32, color: TEAL, fontWeight: "800" }}>
+                    {initial}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <Text style={{ color: "white", fontSize: 20, fontWeight: "800", marginBottom: 4 }}>
+              {username}
             </Text>
             <Text style={{ color: MUTED, fontSize: 13 }}>
-              chandrama@music.local
+              {username.toLowerCase()}@music.local
             </Text>
           </View>
         </SafeAreaView>
@@ -132,29 +207,28 @@ export default function ProfileScreen() {
             padding: 20,
           }}
         >
-          {stats.map((s, i) => (
-            <View
-              key={s.label}
-              style={{
-                flex: 1,
-                alignItems: "center",
-                borderRightWidth: i < stats.length - 1 ? 0.5 : 0,
-                borderRightColor: "#2A2A2A",
-              }}
-            >
-              <Text
+          {loading ? (
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <ActivityIndicator color={TEAL} />
+            </View>
+          ) : (
+            statCards.map((s, i) => (
+              <View
+                key={s.label}
                 style={{
-                  color: TEAL,
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginBottom: 2,
+                  flex: 1,
+                  alignItems: "center",
+                  borderRightWidth: i < statCards.length - 1 ? 0.5 : 0,
+                  borderRightColor: "#2A2A2A",
                 }}
               >
-                {s.value}
-              </Text>
-              <Text style={{ color: MUTED, fontSize: 12 }}>{s.label}</Text>
-            </View>
-          ))}
+                <Text style={{ color: TEAL, fontSize: 22, fontWeight: "800", marginBottom: 2 }}>
+                  {s.value}
+                </Text>
+                <Text style={{ color: MUTED, fontSize: 12 }}>{s.label}</Text>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Menu */}
@@ -194,14 +268,7 @@ export default function ProfileScreen() {
               >
                 <Ionicons name={item.icon} size={18} color={TEAL} />
               </View>
-              <Text
-                style={{
-                  flex: 1,
-                  color: "white",
-                  fontSize: 15,
-                  fontWeight: "600",
-                }}
-              >
+              <Text style={{ flex: 1, color: "white", fontSize: 15, fontWeight: "600" }}>
                 {item.label}
               </Text>
               {item.badge && (
@@ -213,9 +280,7 @@ export default function ProfileScreen() {
                     borderRadius: 20,
                   }}
                 >
-                  <Text
-                    style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}
-                  >
+                  <Text style={{ color: TEAL, fontSize: 12, fontWeight: "700" }}>
                     {item.badge}
                   </Text>
                 </View>

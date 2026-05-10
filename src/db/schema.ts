@@ -41,6 +41,7 @@ export async function initDatabase(): Promise<void> {
       local_file_path TEXT,
       duration_ms INTEGER,
       play_count INTEGER DEFAULT 0,
+      listening_ms INTEGER DEFAULT 0,
       is_liked INTEGER DEFAULT 0,
       source TEXT DEFAULT 'download',
       added_at INTEGER DEFAULT (strftime('%s', 'now')),
@@ -85,6 +86,12 @@ export async function initDatabase(): Promise<void> {
   try {
     await db.execAsync(`ALTER TABLE tracks ADD COLUMN cover_url TEXT;`);
   } catch (e) {}
+  try {
+    await db.execAsync(`ALTER TABLE playlists ADD COLUMN color TEXT;`);
+  } catch (e) {}
+  try {
+    await db.execAsync(`ALTER TABLE tracks ADD COLUMN listening_ms INTEGER DEFAULT 0;`);
+  } catch (e) {}
 }
 
 export async function insertTrackFromFile(
@@ -107,12 +114,9 @@ export async function insertTrackFromFile(
     `SELECT id FROM artists WHERE name = '${artistName.replace(/'/g, "''")}';`,
   );
 
-  // Fetch cover Deezer
-  // Fetch cover Deezer via la track directement
   let coverUrl: string | null = null;
   try {
     const { deezer } = await import("@/services/lastfm");
-    // Cherche la track sur Deezer — retourne la cover de l'album de la track
     coverUrl = await deezer.searchTrackPreviewAndCover(artistName, title);
   } catch (e) {}
 
@@ -221,22 +225,84 @@ export async function getLikedTracks(): Promise<
   `);
 }
 
+// ─── Playlists ─────────────────────────────────────────────────────────────────
+
+export async function getAllPlaylists(): Promise<
+  {
+    id: number;
+    name: string;
+    color: string | null;
+    track_count: number;
+  }[]
+> {
+  const db = await getDatabase();
+  return await db.getAllAsync(`
+    SELECT p.id, p.name, p.color,
+           COUNT(pt.track_id) as track_count
+    FROM playlists p
+    LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
+    GROUP BY p.id
+    ORDER BY p.created_at DESC;
+  `);
+}
+
+// ─── Stats enrichies ───────────────────────────────────────────────────────────
+
 export async function getStats(): Promise<{
   totalTracks: number;
   totalPlaylists: number;
+  likedTracksCount: number;
+  totalListeningHours: number;
 }> {
   const db = await getDatabase();
+
   const tracks = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM tracks;`,
+    `SELECT COUNT(*) as count FROM tracks WHERE source = 'download';`,
   );
   const playlists = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM playlists;`,
   );
+  const liked = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM tracks WHERE is_liked = 1;`,
+  );
+  // listening_ms accumulé via incrementListeningTime()
+  const listening = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(listening_ms), 0) as total FROM tracks;`,
+  );
+
+  const totalMs = listening?.total ?? 0;
+  const totalHours = Math.round(totalMs / 1000 / 60 / 60);
+
   return {
     totalTracks: tracks?.count ?? 0,
     totalPlaylists: playlists?.count ?? 0,
+    likedTracksCount: liked?.count ?? 0,
+    totalListeningHours: totalHours,
   };
 }
+
+/**
+ * Appelle cette fonction depuis le player quand une track avance
+ * ex: incrementListeningTime(trackId, 1000) toutes les secondes
+ */
+export async function incrementListeningTime(
+  trackId: number,
+  ms: number,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(
+    `UPDATE tracks SET listening_ms = COALESCE(listening_ms, 0) + ${ms} WHERE id = ${trackId};`,
+  );
+}
+
+export async function incrementPlayCount(trackId: number): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(
+    `UPDATE tracks SET play_count = play_count + 1 WHERE id = ${trackId};`,
+  );
+}
+
+// ─── Fin stats ─────────────────────────────────────────────────────────────────
 
 export async function linkLastfmTrack(
   title: string,
@@ -257,11 +323,9 @@ export async function linkLastfmTrack(
     `SELECT id FROM tracks WHERE title = '${title.replace(/'/g, "''")}' AND artist_id = ${artistRow?.id ?? "NULL"};`,
   );
 
-  // Sécurise l'URL de la cover pour le SQL (gère le cas où elle est null ou undefined)
   const safeCoverUrl = coverUrl ? `'${coverUrl.replace(/'/g, "''")}'` : "NULL";
 
   if (existing) {
-    // 👈 ICI : On ajoute la mise à jour de cover_url
     await db.execAsync(
       `UPDATE tracks 
        SET local_file_path = '${localUri.replace(/'/g, "''")}', 
@@ -270,7 +334,6 @@ export async function linkLastfmTrack(
        WHERE id = ${existing.id};`,
     );
   } else {
-    // 👈 ICI : On ajoute cover_url dans les colonnes et les valeurs
     await db.execAsync(`
       INSERT INTO tracks (artist_id, title, local_file_path, source, cover_url)
       VALUES (${artistRow?.id ?? "NULL"}, '${title.replace(/'/g, "''")}', '${localUri.replace(/'/g, "''")}', 'lastfm', ${safeCoverUrl});

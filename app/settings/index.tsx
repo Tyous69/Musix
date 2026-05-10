@@ -67,6 +67,7 @@ export default function SettingsScreen() {
     rightElement,
     onPress,
     danger,
+    last,
   }: {
     icon: IoniconsName;
     label: string;
@@ -74,6 +75,7 @@ export default function SettingsScreen() {
     rightElement?: React.ReactNode;
     onPress?: () => void;
     danger?: boolean;
+    last?: boolean;
   }) {
     return (
       <TouchableOpacity
@@ -84,7 +86,7 @@ export default function SettingsScreen() {
           alignItems: "center",
           paddingVertical: 14,
           paddingHorizontal: 16,
-          borderBottomWidth: 0.5,
+          borderBottomWidth: last ? 0 : 0.5,
           borderBottomColor: "#2A2A2A",
           gap: 14,
         }}
@@ -94,7 +96,7 @@ export default function SettingsScreen() {
             width: 36,
             height: 36,
             borderRadius: 10,
-            backgroundColor: "#0D2B2B",
+            backgroundColor: danger ? "#2A0A0A" : "#0D2B2B",
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -153,6 +155,18 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
       >
+        {/* ── Account ── */}
+        <Section title="Account">
+          <SettingRow
+            icon="person-circle-outline"
+            label="Edit Profile"
+            sublabel="Username & profile picture"
+            onPress={() => router.push("/settings/edit-profile" as any)}
+            last
+          />
+        </Section>
+
+        {/* ── Playback ── */}
         <Section title="Playback">
           <SettingRow
             icon="musical-notes-outline"
@@ -179,9 +193,11 @@ export default function SettingsScreen() {
                 thumbColor="white"
               />
             }
+            last
           />
         </Section>
 
+        {/* ── Downloads & Sync ── */}
         <Section title="Downloads & Sync">
           <SettingRow
             icon="wifi-outline"
@@ -205,10 +221,11 @@ export default function SettingsScreen() {
             icon="folder-outline"
             label="Storage location"
             sublabel="Internal / Documents"
-            onPress={() => {}}
+            last
           />
         </Section>
 
+        {/* ── Notifications ── */}
         <Section title="Notifications">
           <SettingRow
             icon="notifications-outline"
@@ -221,23 +238,26 @@ export default function SettingsScreen() {
                 thumbColor="white"
               />
             }
+            last
           />
         </Section>
 
+        {/* ── About ── */}
         <Section title="About">
           <SettingRow
             icon="information-circle-outline"
             label="Version"
-            sublabel="Musium 1.0.0"
+            sublabel="Musix 1.0.0"
           />
           <SettingRow
             icon="code-slash-outline"
             label="Last.fm API"
             sublabel="Connected"
+            last
           />
         </Section>
 
-        {/* Last row — no border bottom */}
+        {/* ── Sign out ── */}
         <View
           style={{
             marginHorizontal: 20,
@@ -247,32 +267,12 @@ export default function SettingsScreen() {
             marginBottom: 8,
           }}
         >
-          <TouchableOpacity
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              gap: 14,
-            }}
-            activeOpacity={0.7}
-          >
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: "#2A0A0A",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="log-out-outline" size={18} color="#E05C5C" />
-            </View>
-            <Text style={{ color: "#E05C5C", fontSize: 15, fontWeight: "600", flex: 1 }}>
-              Sign out
-            </Text>
-          </TouchableOpacity>
+          <SettingRow
+            icon="log-out-outline"
+            label="Sign out"
+            danger
+            last
+          />
         </View>
       </ScrollView>
     </View>

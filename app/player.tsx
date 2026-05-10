@@ -1,4 +1,8 @@
-import { getAllTracks, linkLastfmTrack } from "@/db/schema";
+import {
+  getAllTracks,
+  linkLastfmTrack,
+  toggleLikedTrack
+} from "@/db/schema";
 import { usePlayerStore } from "@/stores/playerStore";
 import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
@@ -9,7 +13,6 @@ import {
   FlatList,
   Image,
   Modal,
-  ScrollView,
   StatusBar,
   Text,
   TouchableOpacity,
@@ -40,16 +43,40 @@ export default function PlayerScreen() {
     seekFn,
     nextTrack,
     prevTrack,
+    isShuffle,
+    repeatMode,
+    toggleShuffle,
+    toggleRepeat,
   } = usePlayerStore();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
+  const [isLiked, setIsLiked] = useState(false);
+  const [trackDbId, setTrackDbId] = useState<number | null>(null);
 
   useEffect(() => {
     if (modalVisible) {
       getAllTracks().then(setLocalFiles).catch(console.error);
     }
   }, [modalVisible]);
+
+  // Vérifie si la track courante est likée en SQLite
+  useEffect(() => {
+    if (!currentTrack) return;
+    // Cherche l'id SQLite de la track via son localUri
+    getAllTracks().then((tracks) => {
+      const found = tracks.find(
+        (t) => t.local_file_path === currentTrack.localUri,
+      );
+      if (found) {
+        setTrackDbId(found.id);
+        setIsLiked(!!found.is_liked);
+      } else {
+        setTrackDbId(null);
+        setIsLiked(false);
+      }
+    });
+  }, [currentTrack?.id]);
 
   const togglePlay = () => setIsPlaying(!isPlaying);
   const seek = (seconds: number) => seekFn?.(seconds);
@@ -75,6 +102,12 @@ export default function PlayerScreen() {
     setModalVisible(false);
   };
 
+  const handleToggleLike = async () => {
+    if (!trackDbId) return;
+    await toggleLikedTrack(trackDbId);
+    setIsLiked((prev) => !prev);
+  };
+
   if (!currentTrack) {
     return (
       <View
@@ -94,289 +127,243 @@ export default function PlayerScreen() {
     <View style={{ flex: 1, backgroundColor: "#0A0A0A" }}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
+        {/* Top bar */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 20,
+          }}
         >
-          {/* Top bar */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              paddingHorizontal: 20,
-              paddingTop: 12,
-              paddingBottom: 20,
-            }}
-          >
-            <View>
-              <Text
-                style={{
-                  color: MUTED,
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  textTransform: "uppercase",
-                  marginBottom: 4,
-                }}
-              >
-                PLAYING FROM PLAYLIST:
-              </Text>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Text style={{ color: TEAL, fontSize: 14, fontWeight: "700" }}>
-                  {currentTrack.album}
-                </Text>
-                <Ionicons name="chevron-down" size={14} color={TEAL} />
-              </View>
-            </View>
-            {/* 👇 Ouvre la modale de liaison */}
-            <TouchableOpacity
-              style={{ paddingTop: 4 }}
-              onPress={() => setModalVisible(true)}
-            >
-              <Ionicons name="ellipsis-vertical" size={22} color="white" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Cover Art */}
-          <View style={{ paddingHorizontal: 16, marginBottom: 28 }}>
-            {currentTrack.coverUrl ? (
-              <Image
-                source={{ uri: currentTrack.coverUrl }}
-                style={{
-                  width: COVER_SIZE,
-                  height: COVER_SIZE,
-                  borderRadius: 16,
-                }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={{
-                  width: COVER_SIZE,
-                  height: COVER_SIZE,
-                  borderRadius: 16,
-                  backgroundColor: "#1A1A1A",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="musical-notes" size={80} color={MUTED} />
-              </View>
-            )}
-          </View>
-
-          {/* Track info */}
-          <View
-            style={{
-              paddingHorizontal: 20,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 20,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 26,
-                  fontWeight: "800",
-                  letterSpacing: -0.5,
-                }}
-                numberOfLines={1}
-              >
-                {currentTrack.title}
-              </Text>
-              <Text
-                style={{ color: MUTED, fontSize: 16, marginTop: 4 }}
-                numberOfLines={1}
-              >
-                {currentTrack.artist}
-              </Text>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 20,
-                marginLeft: 16,
-                alignItems: "center",
-              }}
-            >
-              {/* Indicateur fichier local */}
-              {currentTrack.localUri && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    backgroundColor: "#0A3A2A",
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Ionicons name="checkmark-circle" size={12} color={TEAL} />
-                  <Text
-                    style={{ color: TEAL, fontSize: 11, fontWeight: "700" }}
-                  >
-                    Local
-                  </Text>
-                </View>
-              )}
-              <TouchableOpacity>
-                <Ionicons name="share-social-outline" size={24} color={MUTED} />
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Ionicons name="heart-outline" size={24} color={MUTED} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Progress bar */}
-          <View style={{ paddingHorizontal: 16, marginBottom: 4 }}>
-            <Slider
-              minimumValue={0}
-              maximumValue={duration || 1}
-              value={position}
-              onSlidingComplete={seek}
-              minimumTrackTintColor={TEAL}
-              maximumTrackTintColor="#2A2A2A"
-              thumbTintColor={TEAL}
-              style={{ height: 40 }}
-            />
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginTop: -8,
-                paddingHorizontal: 4,
-              }}
-            >
-              <Text style={{ color: MUTED, fontSize: 12 }}>
-                {formatTime(position)}
-              </Text>
-              <Text style={{ color: MUTED, fontSize: 12 }}>
-                {formatTime(duration)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Controls */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 24,
-              marginTop: 16,
-              marginBottom: 20,
-            }}
-          >
-            <TouchableOpacity
-              style={{
-                backgroundColor: "#1A1A1A",
-                borderRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              <Ionicons name="shuffle" size={18} color="white" />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={prevTrack}>
-              <Ionicons name="play-skip-back" size={34} color="white" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={togglePlay}
-              style={{
-                width: 68,
-                height: 68,
-                borderRadius: 34,
-                backgroundColor: TEAL,
-                alignItems: "center",
-                justifyContent: "center",
-                shadowColor: TEAL,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.4,
-                shadowRadius: 8,
-                elevation: 8,
-              }}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={30}
-                color="white"
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={nextTrack}>
-              <Ionicons name="play-skip-forward" size={34} color="white" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                backgroundColor: "#1A1A1A",
-                borderRadius: 20,
-                padding: 8,
-              }}
-            >
-              <Ionicons name="add" size={18} color="white" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Download */}
-          <View
-            style={{
-              alignItems: "flex-end",
-              paddingHorizontal: 24,
-              marginBottom: 28,
-            }}
-          >
-            <TouchableOpacity>
-              <Ionicons name="download-outline" size={22} color={MUTED} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Lyrics */}
-          <View style={{ paddingHorizontal: 20 }}>
+          <View>
             <Text
               style={{
                 color: MUTED,
-                fontSize: 11,
-                fontWeight: "700",
+                fontSize: 10,
                 letterSpacing: 2,
-                marginBottom: 12,
+                textTransform: "uppercase",
+                marginBottom: 4,
               }}
             >
-              LYRICS
+              PLAYING FROM:
             </Text>
             <View
-              style={{
-                borderRadius: 20,
-                overflow: "hidden",
-                backgroundColor: TEAL,
-                padding: 24,
-              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 20,
-                  fontWeight: "800",
-                  lineHeight: 32,
-                }}
-              >
-                {"Lyrics not available\nfor this track"}
+              <Text style={{ color: TEAL, fontSize: 14, fontWeight: "700" }}>
+                {currentTrack.album || "Unknown"}
               </Text>
+              <Ionicons name="chevron-down" size={14} color={TEAL} />
             </View>
           </View>
-        </ScrollView>
+          <TouchableOpacity
+            style={{ paddingTop: 4 }}
+            onPress={() => setModalVisible(true)}
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Cover Art */}
+        <View style={{ paddingHorizontal: 16, marginBottom: 28 }}>
+          {currentTrack.coverUrl ? (
+            <Image
+              source={{ uri: currentTrack.coverUrl }}
+              style={{
+                width: COVER_SIZE,
+                height: COVER_SIZE,
+                borderRadius: 16,
+              }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={{
+                width: COVER_SIZE,
+                height: COVER_SIZE,
+                borderRadius: 16,
+                backgroundColor: "#1A1A1A",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="musical-notes" size={80} color={MUTED} />
+            </View>
+          )}
+        </View>
+
+        {/* Track info + like */}
+        <View
+          style={{
+            paddingHorizontal: 20,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 20,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 26,
+                fontWeight: "800",
+                letterSpacing: -0.5,
+              }}
+              numberOfLines={1}
+            >
+              {currentTrack.title}
+            </Text>
+            <Text
+              style={{ color: MUTED, fontSize: 16, marginTop: 4 }}
+              numberOfLines={1}
+            >
+              {currentTrack.artist}
+            </Text>
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 16,
+              marginLeft: 16,
+              alignItems: "center",
+            }}
+          >
+            {currentTrack.localUri && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: "#0A3A2A",
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={12} color={TEAL} />
+                <Text style={{ color: TEAL, fontSize: 11, fontWeight: "700" }}>
+                  Local
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity onPress={handleToggleLike}>
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={26}
+                color={isLiked ? TEAL : MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Progress bar */}
+        <View style={{ paddingHorizontal: 16, marginBottom: 4 }}>
+          <Slider
+            minimumValue={0}
+            maximumValue={duration || 1}
+            value={position}
+            onSlidingComplete={seek}
+            minimumTrackTintColor={TEAL}
+            maximumTrackTintColor="#2A2A2A"
+            thumbTintColor={TEAL}
+            style={{ height: 40 }}
+          />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: -8,
+              paddingHorizontal: 4,
+            }}
+          >
+            <Text style={{ color: MUTED, fontSize: 12 }}>
+              {formatTime(position)}
+            </Text>
+            <Text style={{ color: MUTED, fontSize: 12 }}>
+              {formatTime(duration)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Controls */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 24,
+            marginTop: 16,
+            marginBottom: 20,
+          }}
+        >
+          <TouchableOpacity
+            onPress={toggleShuffle}
+            style={{
+              backgroundColor: isShuffle ? TEAL : "#1A1A1A",
+              borderRadius: 20,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+            }}
+          >
+            <Ionicons
+              name="shuffle"
+              size={18}
+              color={isShuffle ? "black" : "white"}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={prevTrack}>
+            <Ionicons name="play-skip-back" size={34} color="white" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={togglePlay}
+            style={{
+              width: 68,
+              height: 68,
+              borderRadius: 34,
+              backgroundColor: TEAL,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: TEAL,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.4,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+          >
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={30}
+              color="white"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={nextTrack}>
+            <Ionicons name="play-skip-forward" size={34} color="white" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={toggleRepeat}
+            style={{
+              backgroundColor: repeatMode !== "none" ? TEAL : "#1A1A1A",
+              borderRadius: 20,
+              padding: 8,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons
+              name={repeatMode === "one" ? "repeat-sharp" : "repeat"}
+              size={18}
+              color={repeatMode !== "none" ? "black" : "white"}
+            />
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
 
       {/* Modale liaison MP3 */}
@@ -416,7 +403,7 @@ export default function PlayerScreen() {
                 <Text
                   style={{ color: "white", fontSize: 16, fontWeight: "800" }}
                 >
-                  Lier un fichier local
+                  Link a local file
                 </Text>
                 <Text
                   style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
@@ -442,7 +429,7 @@ export default function PlayerScreen() {
                     paddingHorizontal: 32,
                   }}
                 >
-                  Aucun MP3 local.{"\n"}Sync via Wi-Fi d'abord.
+                  No local MP3.{"\n"}Sync via Wi-Fi first.
                 </Text>
               </View>
             ) : (

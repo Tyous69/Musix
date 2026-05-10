@@ -41,6 +41,7 @@ export default function AlbumScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<any>(null);
   const [linkedUris, setLinkedUris] = useState<Record<string, string>>({});
+  const [playAllLoading, setPlayAllLoading] = useState(false);
 
   const { setTrack, setQueue, setIsMinimized } = usePlayerStore();
 
@@ -61,7 +62,6 @@ export default function AlbumScreen() {
     }
   }, [artist, name]);
 
-  // Charge les URIs déjà liées pour les tracks de cet album
   useEffect(() => {
     if (!album?.tracks?.track) return;
     const trackList = Array.isArray(album.tracks.track)
@@ -103,10 +103,8 @@ export default function AlbumScreen() {
     const localUri = linkedUris[track.name] ?? null;
 
     if (localUri) {
-      // Fichier local disponible — joue directement
       queue[index] = { ...queue[index], localUri };
     } else {
-      // Pas de fichier local — fetch preview Deezer
       const trackArtist = track.artist?.name ?? artist ?? "";
       const previewUrl = await deezer.searchTrackPreview(
         trackArtist,
@@ -122,24 +120,30 @@ export default function AlbumScreen() {
 
   const handlePlayAll = async () => {
     if (tracks.length === 0) return;
-    const queue = tracks.map((t: any) => buildTrack(t, coverImage));
-    const firstTrack = tracks[0];
-    const localUri = linkedUris[firstTrack.name] ?? null;
+    setPlayAllLoading(true);
 
-    if (localUri) {
-      queue[0] = { ...queue[0], localUri };
-    } else {
-      const trackArtist = firstTrack.artist?.name ?? artist ?? "";
-      const previewUrl = await deezer.searchTrackPreview(
-        trackArtist,
-        firstTrack.name,
-      );
-      queue[0] = { ...queue[0], previewUrl };
+    try {
+      const queue = tracks.map((t: any) => buildTrack(t, coverImage));
+      const firstTrack = tracks[0];
+      const localUri = linkedUris[firstTrack.name] ?? null;
+
+      if (localUri) {
+        queue[0] = { ...queue[0], localUri };
+      } else {
+        const trackArtist = firstTrack.artist?.name ?? artist ?? "";
+        const previewUrl = await deezer.searchTrackPreview(
+          trackArtist,
+          firstTrack.name,
+        );
+        queue[0] = { ...queue[0], previewUrl };
+      }
+
+      setQueue(queue);
+      setTrack(queue[0]);
+      setIsMinimized(true);
+    } finally {
+      setPlayAllLoading(false);
     }
-
-    setQueue(queue);
-    setTrack(queue[0]);
-    setIsMinimized(true);
   };
 
   const openLinkModal = (track: any) => {
@@ -154,7 +158,7 @@ export default function AlbumScreen() {
       selectedTrack.name,
       trackArtist,
       file.local_file_path,
-      coverImage, // 👈 passe la cover de l'album
+      coverImage,
     );
     setLinkedUris((prev) => ({
       ...prev,
@@ -265,7 +269,7 @@ export default function AlbumScreen() {
           </Text>
           {tracks.length > 0 && (
             <Text style={{ color: "#555", fontSize: 13, marginTop: 4 }}>
-              {tracks.length} titres
+              {tracks.length} tracks
             </Text>
           )}
         </View>
@@ -274,6 +278,7 @@ export default function AlbumScreen() {
         <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
           <TouchableOpacity
             onPress={handlePlayAll}
+            disabled={playAllLoading}
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -282,11 +287,16 @@ export default function AlbumScreen() {
               borderRadius: 30,
               paddingVertical: 14,
               gap: 8,
+              opacity: playAllLoading ? 0.7 : 1,
             }}
           >
-            <Ionicons name="play" size={20} color="black" />
+            {playAllLoading ? (
+              <ActivityIndicator size="small" color="black" />
+            ) : (
+              <Ionicons name="play" size={20} color="black" />
+            )}
             <Text style={{ color: "black", fontWeight: "800", fontSize: 15 }}>
-              Tout lire
+              Play All
             </Text>
           </TouchableOpacity>
         </View>
@@ -301,7 +311,7 @@ export default function AlbumScreen() {
                 paddingVertical: 32,
               }}
             >
-              Aucune piste disponible
+              No tracks available
             </Text>
           ) : (
             tracks.map((track: any, index: number) => (
@@ -332,7 +342,6 @@ export default function AlbumScreen() {
                     </Text>
                   )}
                 </View>
-                {/* Indicateur fichier local lié */}
                 {linkedUris[track.name] && (
                   <Ionicons
                     name="checkmark-circle"
@@ -384,7 +393,6 @@ export default function AlbumScreen() {
               maxHeight: "70%",
             }}
           >
-            {/* Header modale */}
             <View
               style={{
                 flexDirection: "row",
@@ -398,7 +406,7 @@ export default function AlbumScreen() {
                 <Text
                   style={{ color: "white", fontSize: 16, fontWeight: "800" }}
                 >
-                  Lier un fichier local
+                  Link a local file
                 </Text>
                 <Text
                   style={{ color: MUTED, fontSize: 13, marginTop: 2 }}
@@ -424,7 +432,7 @@ export default function AlbumScreen() {
                     paddingHorizontal: 32,
                   }}
                 >
-                  Aucun MP3 local disponible.{"\n"}Sync via Wi-Fi d'abord.
+                  No local MP3 available.{"\n"}Sync via Wi-Fi first.
                 </Text>
               </View>
             ) : (

@@ -2,7 +2,6 @@ import { LastfmAlbum, LastfmArtist, LastfmSearchResult } from "@/types/lastfm";
 import axios from "axios";
 
 const API_KEY = process.env.EXPO_PUBLIC_LASTFM_API_KEY;
-console.log("🔑 API Key:", API_KEY);
 const BASE_URL = "https://ws.audioscrobbler.com/2.0";
 
 const api = axios.create({
@@ -16,11 +15,7 @@ const api = axios.create({
 export const lastfm = {
   async searchArtists(query: string): Promise<LastfmArtist[]> {
     const { data } = await api.get<LastfmSearchResult>("", {
-      params: {
-        method: "artist.search",
-        artist: query,
-        limit: 20,
-      },
+      params: { method: "artist.search", artist: query, limit: 20 },
     });
     const results = data.results?.artistmatches?.artist ?? [];
     return Array.isArray(results) ? results : [results];
@@ -28,43 +23,28 @@ export const lastfm = {
 
   async getArtistInfo(name: string): Promise<LastfmArtist> {
     const { data } = await api.get("", {
-      params: {
-        method: "artist.getinfo",
-        artist: name,
-      },
+      params: { method: "artist.getinfo", artist: name },
     });
     return data.artist;
   },
 
   async getArtistTopAlbums(name: string): Promise<LastfmAlbum[]> {
     const { data } = await api.get("", {
-      params: {
-        method: "artist.gettopalbums",
-        artist: name,
-        limit: 10,
-      },
+      params: { method: "artist.gettopalbums", artist: name, limit: 10 },
     });
     return data.topalbums?.album ?? [];
   },
 
   async getAlbumInfo(artist: string, album: string): Promise<LastfmAlbum> {
     const { data } = await api.get("", {
-      params: {
-        method: "album.getinfo",
-        artist,
-        album,
-      },
+      params: { method: "album.getinfo", artist, album },
     });
     return data.album;
   },
 
   async searchAlbums(query: string): Promise<LastfmAlbum[]> {
     const { data } = await api.get<LastfmSearchResult>("", {
-      params: {
-        method: "album.search",
-        album: query,
-        limit: 20,
-      },
+      params: { method: "album.search", album: query, limit: 20 },
     });
     const results = data.results?.albummatches?.album ?? [];
     return Array.isArray(results) ? results : [results];
@@ -82,36 +62,36 @@ export const lastfm = {
 export const deezer = {
   async searchArtistImage(name: string): Promise<string | null> {
     try {
-      // Garde le nom complet, enlève juste les caractères spéciaux
       const cleaned = name.replace(/[^a-zA-Z0-9\s,]/g, " ").trim();
-
-      console.log("🔍 Searching for:", cleaned);
-
       const { data } = await axios.get(
         `https://api.deezer.com/search/artist?q=${encodeURIComponent(cleaned)}&limit=10`,
       );
-
       const artists = data.data ?? [];
-      console.log(
-        "🎤 Artists returned:",
-        artists.map((a: any) => `${a.name} (${a.nb_fan} fans)`),
-      );
-
-      // Trouve le meilleur match par similarité de nom + nb_fan
       const lowerName = name.toLowerCase();
       const scored = artists.map((a: any) => {
         const aName = a.name.toLowerCase();
-        let score = (a.nb_fan ?? 0) / 1_000_000; // base score = popularité
-        if (aName === lowerName) score += 1000; // exact match
+        let score = (a.nb_fan ?? 0) / 1_000_000;
+        if (aName === lowerName) score += 1000;
         if (aName.startsWith(lowerName.split(",")[0].toLowerCase()))
           score += 10;
         return { ...a, score };
       });
-
       scored.sort((a: any, b: any) => b.score - a.score);
-      console.log("🏆 Winner:", scored[0]?.name);
-
       return scored[0]?.picture_xl ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  async searchAlbumCover(
+    artist: string,
+    album: string,
+  ): Promise<string | null> {
+    try {
+      const { data } = await axios.get(
+        `https://api.deezer.com/search/album?q=${encodeURIComponent(artist + " " + album)}&limit=1`,
+      );
+      return data.data?.[0]?.cover_xl ?? null;
     } catch {
       return null;
     }
@@ -131,15 +111,27 @@ export const deezer = {
     }
   },
 
-  async searchAlbumCover(
+  async searchTrackPreviewAndCover(
     artist: string,
-    album: string,
+    title: string,
   ): Promise<string | null> {
     try {
       const { data } = await axios.get(
-        `https://api.deezer.com/search/album?q=${encodeURIComponent(artist + " " + album)}&limit=1`,
+        `https://api.deezer.com/search/track?q=${encodeURIComponent(artist + " " + title)}&limit=5`,
       );
-      return data.data?.[0]?.cover_xl ?? null;
+      const tracks = data.data ?? [];
+      if (tracks.length === 0) return null;
+      const lowerTitle = title.toLowerCase();
+      const lowerArtist = artist.toLowerCase();
+      const best =
+        tracks.find(
+          (t: any) =>
+            t.title?.toLowerCase() === lowerTitle &&
+            t.artist?.name?.toLowerCase() === lowerArtist,
+        ) ??
+        tracks.find((t: any) => t.title?.toLowerCase().includes(lowerTitle)) ??
+        tracks[0];
+      return best?.album?.cover_xl ?? null;
     } catch {
       return null;
     }

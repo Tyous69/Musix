@@ -1,6 +1,7 @@
-import { useEffect, useRef, useCallback } from "react";
-import { Audio } from "expo-av";
+import { recordTrackPlay } from "@/db/schema";
 import { usePlayerStore } from "@/stores/playerStore";
+import { Audio } from "expo-av";
+import { useCallback, useEffect, useRef } from "react";
 
 export function useAudio() {
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -37,7 +38,6 @@ export function useAudio() {
     if (!currentTrack) return;
     const uri = currentTrack.localUri ?? currentTrack.previewUrl;
     if (!uri) return;
-
     let mounted = true;
 
     const load = async () => {
@@ -53,18 +53,39 @@ export function useAudio() {
           if (!mounted || !status.isLoaded) return;
           setPosition(Math.floor(status.positionMillis / 1000));
           setDuration(Math.floor((status.durationMillis ?? 0) / 1000));
-          if (status.didJustFinish) nextTrack();
-        }
+          if (status.didJustFinish) {
+            // Utilise getState() pour avoir les valeurs actuelles
+            const { repeatMode, nextTrack } = usePlayerStore.getState();
+            if (repeatMode === "one") {
+              // Rejoue depuis le début
+              soundRef.current?.replayAsync();
+            } else {
+              nextTrack();
+            }
+          }
+        },
       );
 
       if (mounted) {
         soundRef.current = sound;
         setIsPlaying(true);
+
+        // Enregistre la track dans les récentes
+        if (currentTrack) {
+          recordTrackPlay({
+            id: currentTrack.id,
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            coverUrl: currentTrack.coverUrl,
+          }).catch(console.error);
+        }
       }
     };
 
     load().catch(console.error);
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [currentTrack?.id]);
 
   useEffect(() => {
@@ -80,7 +101,9 @@ export function useAudio() {
   }, [isPlaying]);
 
   useEffect(() => {
-    return () => { soundRef.current?.unloadAsync(); };
+    return () => {
+      soundRef.current?.unloadAsync();
+    };
   }, []);
 
   const togglePlay = useCallback(() => {

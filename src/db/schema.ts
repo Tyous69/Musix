@@ -62,6 +62,13 @@ export async function initDatabase(): Promise<void> {
       FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
       FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS recent_plays (
+      track_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      artist TEXT,
+      cover_url TEXT,
+      played_at INTEGER
+    );
   `);
 
   // Migrations
@@ -101,16 +108,13 @@ export async function insertTrackFromFile(
   );
 
   // Fetch cover Deezer
+  // Fetch cover Deezer via la track directement
   let coverUrl: string | null = null;
   try {
     const { deezer } = await import("@/services/lastfm");
-    coverUrl = await deezer.searchAlbumCover(artistName, title);
-    if (!coverUrl) {
-      coverUrl = await deezer.searchArtistImage(artistName);
-    }
-  } catch (e) {
-    // Pas de cover disponible, on continue sans
-  }
+    // Cherche la track sur Deezer — retourne la cover de l'album de la track
+    coverUrl = await deezer.searchTrackPreviewAndCover(artistName, title);
+  } catch (e) {}
 
   await db.execAsync(`
     INSERT OR IGNORE INTO tracks (artist_id, title, local_file_path, source, cover_url)
@@ -308,4 +312,40 @@ export async function cleanMissingFiles(): Promise<void> {
       }
     } catch (e) {}
   }
+}
+
+export async function recordTrackPlay(track: {
+  id: string;
+  title: string;
+  artist: string;
+  coverUrl: string | null;
+}): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(`
+    INSERT OR REPLACE INTO recent_plays (track_id, title, artist, cover_url, played_at)
+    VALUES (
+      '${track.id.replace(/'/g, "''")}',
+      '${track.title.replace(/'/g, "''")}',
+      '${track.artist.replace(/'/g, "''")}',
+      ${track.coverUrl ? `'${track.coverUrl.replace(/'/g, "''")}'` : "NULL"},
+      ${Date.now()}
+    );
+  `);
+}
+
+export async function getRecentTracks(): Promise<
+  {
+    track_id: string;
+    title: string;
+    artist: string;
+    cover_url: string | null;
+  }[]
+> {
+  const db = await getDatabase();
+  return await db.getAllAsync(`
+    SELECT track_id, title, artist, cover_url
+    FROM recent_plays
+    ORDER BY played_at DESC
+    LIMIT 6;
+  `);
 }

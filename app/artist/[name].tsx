@@ -44,6 +44,7 @@ function AlbumRow({
         <Image
           source={{ uri: cover }}
           style={{ width: 60, height: 60, borderRadius: 8 }}
+          resizeMode="cover"
         />
       ) : (
         <View
@@ -135,7 +136,13 @@ export default function ArtistScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Image carrée */}
-        <View style={{ paddingHorizontal: 16, marginBottom: 24 }}>
+        <View
+          style={{
+            paddingHorizontal: 16,
+            marginBottom: 24,
+            overflow: "hidden",
+          }}
+        >
           {artistImage ? (
             <Image
               source={{ uri: artistImage }}

@@ -1,7 +1,9 @@
+import { createPlaylist, deletePlaylist, getAllPlaylists } from "@/db/schema";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
+  Alert,
   FlatList,
   Modal,
   Text,
@@ -18,47 +20,76 @@ const CARD_BG = "#1A1A1A";
 const MUTED = "#9E9E9E";
 
 const PLAYLIST_COLORS = [
-  "#2BA8C8", "#7B3EC1", "#C13A5F", "#3A5FC1",
-  "#7BC744", "#C97820", "#1A7B5F", "#8B6914",
+  "#2BA8C8",
+  "#7B3EC1",
+  "#C13A5F",
+  "#3A5FC1",
+  "#7BC744",
+  "#C97820",
+  "#1A7B5F",
+  "#8B6914",
 ];
 
 type Playlist = {
-  id: string;
+  id: number;
   name: string;
-  count: number;
-  color: string;
+  track_count: number;
+  color: string | null;
 };
 
-const MOCK_PLAYLISTS: Playlist[] = [
-  { id: "1", name: "Coffee & Jazz", count: 24, color: "#2BA8C8" },
-  { id: "2", name: "Lo-Fi Beats", count: 18, color: "#7B3EC1" },
-  { id: "3", name: "Anime OSTs", count: 56, color: "#C13A5F" },
-  { id: "4", name: "Chill Mix", count: 12, color: "#3A5FC1" },
-  { id: "5", name: "Pop Mix", count: 30, color: "#7BC744" },
-];
-
 export default function PlaylistsScreen() {
-  const [playlists, setPlaylists] = useState<Playlist[]>(MOCK_PLAYLISTS);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [pickedColor, setPickedColor] = useState(PLAYLIST_COLORS[0]);
+  const [creating, setCreating] = useState(false);
 
-  function createPlaylist() {
+  useFocusEffect(
+    useCallback(() => {
+      getAllPlaylists().then(setPlaylists).catch(console.error);
+    }, []),
+  );
+
+  async function handleCreate() {
     if (!newName.trim()) return;
-    const pl: Playlist = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      count: 0,
-      color: pickedColor,
-    };
-    setPlaylists((prev) => [pl, ...prev]);
-    setNewName("");
-    setShowModal(false);
+    setCreating(true);
+    try {
+      await createPlaylist(newName.trim(), pickedColor);
+      const updated = await getAllPlaylists();
+      setPlaylists(updated);
+      setNewName("");
+      setPickedColor(PLAYLIST_COLORS[0]);
+      setShowModal(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function handleDelete(item: Playlist) {
+    Alert.alert("Delete playlist", `Delete "${item.name}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await deletePlaylist(item.id);
+          setPlaylists((prev) => prev.filter((p) => p.id !== item.id));
+        },
+      },
+    ]);
   }
 
   function renderPlaylist({ item }: { item: Playlist }) {
     return (
       <TouchableOpacity
+        onPress={() =>
+          router.push({
+            pathname: "/playlists/[id]",
+            params: { id: item.id },
+          } as any)
+        }
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -75,7 +106,7 @@ export default function PlaylistsScreen() {
             width: 54,
             height: 54,
             borderRadius: 10,
-            backgroundColor: item.color,
+            backgroundColor: item.color ?? TEAL,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -90,13 +121,13 @@ export default function PlaylistsScreen() {
             {item.name}
           </Text>
           <Text style={{ color: MUTED, fontSize: 13, marginTop: 2 }}>
-            {item.count} songs
+            {item.track_count} songs
           </Text>
         </View>
-        <TouchableOpacity style={{ padding: 6 }}>
-          <Ionicons name="play-circle" size={28} color={TEAL} />
-        </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 6 }}>
+        <TouchableOpacity
+          style={{ padding: 6 }}
+          onPress={() => handleDelete(item)}
+        >
           <Ionicons name="ellipsis-vertical" size={18} color={MUTED} />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -121,7 +152,9 @@ export default function PlaylistsScreen() {
               <Ionicons name="arrow-back" size={24} color={TEAL} />
             </TouchableOpacity>
             <Ionicons name="list" size={26} color={TEAL} />
-            <Text style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}>
+            <Text
+              style={{ color: TEAL, fontSize: 24, fontWeight: "800", flex: 1 }}
+            >
               Playlists
             </Text>
             <TouchableOpacity
@@ -147,7 +180,7 @@ export default function PlaylistsScreen() {
 
       <FlatList
         data={playlists}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderPlaylist}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
@@ -175,7 +208,6 @@ export default function PlaylistsScreen() {
         }
       />
 
-      {/* Create playlist modal */}
       <Modal
         visible={showModal}
         transparent
@@ -208,7 +240,6 @@ export default function PlaylistsScreen() {
             >
               New Playlist
             </Text>
-
             <TextInput
               style={{
                 backgroundColor: CARD_BG,
@@ -227,8 +258,6 @@ export default function PlaylistsScreen() {
               onChangeText={setNewName}
               autoFocus
             />
-
-            {/* Color picker */}
             <Text style={{ color: MUTED, fontSize: 13, marginBottom: 12 }}>
               Pick a color
             </Text>
@@ -255,10 +284,12 @@ export default function PlaylistsScreen() {
                 />
               ))}
             </View>
-
             <View style={{ flexDirection: "row", gap: 12 }}>
               <TouchableOpacity
-                onPress={() => setShowModal(false)}
+                onPress={() => {
+                  setShowModal(false);
+                  setNewName("");
+                }}
                 style={{
                   flex: 1,
                   paddingVertical: 14,
@@ -271,7 +302,8 @@ export default function PlaylistsScreen() {
                 <Text style={{ color: MUTED, fontWeight: "700" }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={createPlaylist}
+                onPress={handleCreate}
+                disabled={creating}
                 style={{
                   flex: 1,
                   paddingVertical: 14,
@@ -281,7 +313,7 @@ export default function PlaylistsScreen() {
                 }}
               >
                 <Text style={{ color: "black", fontWeight: "700" }}>
-                  Create
+                  {creating ? "Creating..." : "Create"}
                 </Text>
               </TouchableOpacity>
             </View>

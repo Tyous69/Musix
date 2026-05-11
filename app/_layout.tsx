@@ -48,13 +48,11 @@ function RootLayoutInner() {
   if (!dbReady) return null;
   if (!animDone) return <SplashAnimation onFinish={handleAnimFinish} />;
 
-  // Sur le player screen — pas de MiniPlayer
   const isPlayerScreen = pathname === "/player";
 
-  // Sur les screens avec tab bar (tabs) — MiniPlayer au-dessus de la tab bar
+  // Tabs screens — MiniPlayer au-dessus de la tab bar
   const isTabScreen =
     pathname === "/" ||
-    pathname.startsWith("/(tabs)") ||
     pathname === "/search" ||
     pathname === "/library" ||
     pathname === "/profile";

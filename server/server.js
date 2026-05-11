@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 
 // Change ce chemin vers ton dossier MP3
-const MP3_DIR = "C:\\Users\\dulou\\Desktop\\song for songz\\song";
+const MP3_DIR = "C:\\Users\\adrie\\Bureau\\fichier\\mp3 musix";
 
 // GET /files — liste tous les MP3
 app.get("/files", (req, res) => {

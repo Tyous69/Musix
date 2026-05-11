@@ -128,28 +128,33 @@ export default function PlayerScreen() {
 
   const handleAddToPlaylist = async (playlist: Playlist) => {
     if (!currentTrack) return;
-    // Trouve ou crée la track en SQLite
-    const tracks = await getAllTracks();
-    const found = tracks.find(
-      (t) => t.title === currentTrack.title && t.artist === currentTrack.artist,
-    );
-    if (found) {
-      await addTrackToPlaylist(playlist.id, found.id);
-    } else {
-      // Like d'abord pour créer la track
-      await likeLastfmTrack(
+    try {
+      // Cherche dans toutes les tracks
+      const { findTrackByTitleAndArtist, likeLastfmTrack } =
+        await import("@/db/schema");
+      let found = await findTrackByTitleAndArtist(
         currentTrack.title,
         currentTrack.artist,
-        currentTrack.coverUrl,
       );
-      const updated = await getAllTracks();
-      const created = updated.find(
-        (t) =>
-          t.title === currentTrack.title && t.artist === currentTrack.artist,
-      );
-      if (created) await addTrackToPlaylist(playlist.id, created.id);
+
+      // Si pas trouvée, crée-la
+      if (!found) {
+        await likeLastfmTrack(
+          currentTrack.title,
+          currentTrack.artist,
+          currentTrack.coverUrl,
+        );
+        found = await findTrackByTitleAndArtist(
+          currentTrack.title,
+          currentTrack.artist,
+        );
+      }
+
+      if (found) await addTrackToPlaylist(playlist.id, found.id);
+      closeModal();
+    } catch (e) {
+      console.error(e);
     }
-    closeModal();
   };
 
   if (!currentTrack) {

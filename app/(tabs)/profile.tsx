@@ -27,6 +27,7 @@ const STORAGE_KEYS = {
 export default function ProfileScreen() {
   const [stats, setStats] = useState({
     totalTracks: 0,
+    totalLinkedTracks: 0,
     totalPlaylists: 0,
     likedTracksCount: 0,
     totalListeningHours: 0,
@@ -68,7 +69,8 @@ export default function ProfileScreen() {
     {
       icon: "musical-notes-outline" as const,
       label: "All Songs",
-      badge: stats.totalTracks > 0 ? stats.totalTracks.toString() : null,
+      badge:
+        stats.totalLinkedTracks > 0 ? stats.totalLinkedTracks.toString() : null,
       route: "/all-songs",
     },
     {
@@ -93,7 +95,7 @@ export default function ProfileScreen() {
     {
       icon: "download-outline" as const,
       label: "Downloads",
-      badge: null,
+      badge: stats.totalTracks > 0 ? stats.totalTracks.toString() : null,
       route: "/downloads",
     },
     {
@@ -208,7 +210,6 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* Stats */}
         <View
           style={{
             flexDirection: "row",
@@ -251,7 +252,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Menu */}
         <View
           style={{
             marginHorizontal: 20,

@@ -1,17 +1,17 @@
 import * as SQLite from "expo-sqlite";
 
-let db: SQLite.SQLiteDatabase;
+// 1. INITIALISATION SYNCHRONE GLOBALE
+// On ouvre la DB une seule fois au moment où le fichier est lu.
+// Fini les problèmes de cache asynchrone et de variables nulles !
+const db = SQLite.openDatabaseSync("musix.db");
 
+// 2. On garde getDatabase pour ne pas casser toutes tes autres fonctions
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync("musix.db");
-  }
   return db;
 }
 
 export async function initDatabase(): Promise<void> {
-  await cleanMissingFiles();
-  const db = await getDatabase();
+  // 3. ON CRÉE LES TABLES EN PREMIER (Très important !)
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
@@ -72,7 +72,7 @@ export async function initDatabase(): Promise<void> {
     );
   `);
 
-  // Migrations
+  // 4. MIGRATIONS
   try {
     await db.execAsync(
       `ALTER TABLE tracks ADD COLUMN is_liked INTEGER DEFAULT 0;`,
@@ -94,6 +94,9 @@ export async function initDatabase(): Promise<void> {
       `ALTER TABLE tracks ADD COLUMN listening_ms INTEGER DEFAULT 0;`,
     );
   } catch (e) {}
+
+  // 5. ON NETTOIE SEULEMENT UNE FOIS QUE LA TABLE "tracks" EXISTE VRAIMENT
+  await cleanMissingFiles();
 }
 
 export async function insertTrackFromFile(
@@ -252,14 +255,17 @@ export async function getAllPlaylists(): Promise<
 
 export async function getStats(): Promise<{
   totalTracks: number;
+  totalLinkedTracks: number;
   totalPlaylists: number;
   likedTracksCount: number;
   totalListeningHours: number;
 }> {
   const db = await getDatabase();
-
   const tracks = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM tracks WHERE source = 'download';`,
+  );
+  const linked = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM tracks WHERE source = 'lastfm';`,
   );
   const playlists = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM playlists;`,
@@ -267,19 +273,15 @@ export async function getStats(): Promise<{
   const liked = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM tracks WHERE is_liked = 1;`,
   );
-  // listening_ms accumulé via incrementListeningTime()
   const listening = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(listening_ms), 0) as total FROM tracks;`,
   );
-
-  const totalMs = listening?.total ?? 0;
-  const totalHours = Math.round(totalMs / 1000 / 60 / 60);
-
   return {
     totalTracks: tracks?.count ?? 0,
+    totalLinkedTracks: linked?.count ?? 0,
     totalPlaylists: playlists?.count ?? 0,
     likedTracksCount: liked?.count ?? 0,
-    totalListeningHours: totalHours,
+    totalListeningHours: Math.round((listening?.total ?? 0) / 1000 / 60 / 60),
   };
 }
 
@@ -574,4 +576,18 @@ export async function wipeAllData(): Promise<void> {
     await import("@react-native-async-storage/async-storage")
   ).default;
   await AsyncStorage.clear();
+}
+
+export async function findTrackByTitleAndArtist(
+  title: string,
+  artist: string,
+): Promise<{ id: number } | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ id: number }>(`
+    SELECT t.id FROM tracks t
+    LEFT JOIN artists a ON t.artist_id = a.id
+    WHERE t.title = '${title.replace(/'/g, "''")}' 
+    AND a.name = '${artist.replace(/'/g, "''")}';
+  `);
+  return row ?? null;
 }

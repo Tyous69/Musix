@@ -224,7 +224,22 @@ export default function HomeScreen() {
                     const found = allTracks.find(
                       (t) => String(t.id) === item.track_id,
                     );
-                    if (found) playTrack(found);
+                    if (found) {
+                      const queue = allTracks.map((t) => ({
+                        id: String(t.id),
+                        title: t.title,
+                        artist: t.artist,
+                        album: "",
+                        coverUrl: t.cover_url ?? null,
+                        previewUrl: null,
+                        localUri: t.local_file_path,
+                      }));
+                      const idx = queue.findIndex(
+                        (t) => t.id === String(found.id),
+                      );
+                      setQueue(queue);
+                      setTrack(queue[idx >= 0 ? idx : 0]);
+                    }
                   }}
                   style={{
                     width: (width - 52) / 2,

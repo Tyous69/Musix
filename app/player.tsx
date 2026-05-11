@@ -180,14 +180,24 @@ export default function PlayerScreen() {
         <View
           style={{
             flexDirection: "row",
-            alignItems: "flex-start",
+            alignItems: "center", // 1. Modifié : "center" au lieu de "flex-start"
             justifyContent: "space-between",
             paddingHorizontal: 20,
             paddingTop: 12,
             paddingBottom: 20,
           }}
         >
-          <View>
+          {/* 2. AJOUT : Le bouton retour */}
+          {/* Bouton Retour avec la flèche de l'AlbumScreen */}
+          <TouchableOpacity
+            style={{ width: 40, alignItems: "flex-start", paddingTop: 4 }}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+
+          {/* 3. Modifié : Ajout de flex: 1 et alignItems: "center" pour centrer le texte */}
+          <View style={{ flex: 1, alignItems: "center" }}>
             <Text
               style={{
                 color: MUTED,
@@ -208,7 +218,12 @@ export default function PlayerScreen() {
               <Ionicons name="chevron-down" size={14} color={TEAL} />
             </View>
           </View>
-          <TouchableOpacity style={{ paddingTop: 4 }} onPress={openModal}>
+
+          {/* 4. Modifié : Ajout d'une largeur fixe pour garder la symétrie avec le bouton retour */}
+          <TouchableOpacity
+            style={{ width: 40, alignItems: "flex-end" }}
+            onPress={openModal}
+          >
             <Ionicons name="ellipsis-vertical" size={22} color="white" />
           </TouchableOpacity>
         </View>
